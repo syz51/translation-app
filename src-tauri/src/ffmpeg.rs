@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tauri::{AppHandle, Emitter, Window};
+use tauri::{AppHandle, Emitter, Manager, Window};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
@@ -23,13 +23,6 @@ pub struct TaskInfo {
     pub id: String,
     #[serde(rename = "filePath")]
     pub file_path: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ProgressPayload {
-    #[serde(rename = "taskId")]
-    pub task_id: String,
-    pub progress: f32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -106,10 +99,10 @@ fn get_binary_path(app_handle: &AppHandle, binary_name: &str) -> Result<PathBuf>
 }
 
 /// Extract audio from a video file to WAV format
+/// Returns the path to the extracted audio file in the temp directory
 pub async fn extract_audio_to_wav(
     task_id: &str,
     input_path: &str,
-    output_folder: &str,
     window: &Window,
     app_handle: &AppHandle,
 ) -> Result<String> {
@@ -125,15 +118,6 @@ pub async fn extract_audio_to_wav(
         task_id,
         "metadata",
         &format!("Starting audio extraction for: {}", input_path),
-    )
-    .await?;
-
-    logger::append_log_entry(
-        app_handle,
-        window,
-        task_id,
-        "metadata",
-        &format!("Output folder: {}", output_folder),
     )
     .await?;
 
@@ -155,8 +139,17 @@ pub async fn extract_audio_to_wav(
         .to_str()
         .context("Invalid file name")?;
 
-    // Create output path
-    let output_path = Path::new(output_folder).join(format!("{}.wav", file_stem));
+    // Create output path in temp directory
+    let temp_dir = app_handle
+        .path()
+        .temp_dir()
+        .context("Failed to get temp directory")?;
+
+    // Create a subdirectory for audio extraction
+    let audio_temp_dir = temp_dir.join("translation-app-audio");
+    std::fs::create_dir_all(&audio_temp_dir).context("Failed to create audio temp directory")?;
+
+    let output_path = audio_temp_dir.join(format!("{}_{}.wav", task_id, file_stem));
     let output_path_str = output_path
         .to_str()
         .context("Invalid output path")?
@@ -167,28 +160,7 @@ pub async fn extract_audio_to_wav(
         window,
         task_id,
         "metadata",
-        &format!("Output file: {}", output_path_str),
-    )
-    .await?;
-
-    // Get video duration first for progress calculation
-    logger::append_log_entry(
-        app_handle,
-        window,
-        task_id,
-        "metadata",
-        "Running ffprobe to analyze video duration...",
-    )
-    .await?;
-
-    let duration = get_video_duration(input_path, app_handle, window, task_id).await?;
-
-    logger::append_log_entry(
-        app_handle,
-        window,
-        task_id,
-        "ffprobe",
-        &format!("Video duration: {:.2} seconds", duration),
+        &format!("Extracting audio to temp file: {}", output_path_str),
     )
     .await?;
 
@@ -217,8 +189,6 @@ pub async fn extract_audio_to_wav(
         .arg("1") // Mono
         .arg("-y") // Overwrite output file
         .arg(&output_path_str)
-        .arg("-progress")
-        .arg("pipe:2") // Progress to stderr
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -228,15 +198,15 @@ pub async fn extract_audio_to_wav(
 
     let mut child = cmd.spawn().context("Failed to spawn ffmpeg process")?;
 
-    // Read stderr for progress updates and logging
-    if let Some(stderr) = child.stderr.take() {
+    // Create handles for the reader tasks
+    let stderr_handle = if let Some(stderr) = child.stderr.take() {
         let reader = BufReader::new(stderr);
         let mut lines = reader.lines();
         let window_clone = window.clone();
         let app_handle_clone = app_handle.clone();
         let task_id_clone = task_id.to_string();
 
-        tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             while let Ok(Some(line)) = lines.next_line().await {
                 // Log the ffmpeg output
                 let _ = logger::append_log_entry(
@@ -247,30 +217,21 @@ pub async fn extract_audio_to_wav(
                     &line,
                 )
                 .await;
-
-                // Parse progress and emit progress event
-                if let Some(progress) = parse_progress(&line, duration) {
-                    let _ = window_clone.emit(
-                        "task:progress",
-                        ProgressPayload {
-                            task_id: task_id_clone.clone(),
-                            progress,
-                        },
-                    );
-                }
             }
-        });
-    }
+        }))
+    } else {
+        None
+    };
 
     // Read stdout if needed
-    if let Some(stdout) = child.stdout.take() {
+    let stdout_handle = if let Some(stdout) = child.stdout.take() {
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
         let window_clone = window.clone();
         let app_handle_clone = app_handle.clone();
         let task_id_clone = task_id.to_string();
 
-        tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             while let Ok(Some(line)) = lines.next_line().await {
                 let _ = logger::append_log_entry(
                     &app_handle_clone,
@@ -281,11 +242,21 @@ pub async fn extract_audio_to_wav(
                 )
                 .await;
             }
-        });
-    }
+        }))
+    } else {
+        None
+    };
 
     // Wait for the process to complete
     let output = child.wait().await.context("Failed to wait for ffmpeg")?;
+
+    // Wait for log readers to complete before proceeding
+    if let Some(handle) = stderr_handle {
+        let _ = handle.await;
+    }
+    if let Some(handle) = stdout_handle {
+        let _ = handle.await;
+    }
 
     if !output.success() {
         let error_msg = format!("FFmpeg process failed with status: {}", output);
@@ -302,86 +273,8 @@ pub async fn extract_audio_to_wav(
     )
     .await?;
 
-    // Emit completion event
-    window
-        .emit(
-            "task:completed",
-            TaskCompletePayload {
-                task_id: task_id.to_string(),
-                output_path: output_path_str.clone(),
-            },
-        )
-        .context("Failed to emit task:completed event")?;
+    // Don't emit task:completed here - this is just audio extraction phase
+    // The task will be marked as completed after transcription finishes
 
     Ok(output_path_str)
-}
-
-/// Get the duration of a video file in seconds
-async fn get_video_duration(
-    input_path: &str,
-    app_handle: &AppHandle,
-    window: &Window,
-    task_id: &str,
-) -> Result<f32> {
-    // Get ffprobe binary path
-    let ffprobe_path = get_binary_path(app_handle, "ffprobe")?;
-
-    let mut cmd = Command::new(ffprobe_path);
-    cmd.arg("-v")
-        .arg("error")
-        .arg("-show_entries")
-        .arg("format=duration")
-        .arg("-of")
-        .arg("default=noprint_wrappers=1:nokey=1")
-        .arg(input_path);
-
-    // On Windows, prevent console window from appearing
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    let output = cmd.output().await.context("Failed to run ffprobe")?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        logger::append_log_entry(
-            app_handle,
-            window,
-            task_id,
-            "error",
-            &format!("ffprobe failed: {}", error),
-        )
-        .await?;
-        anyhow::bail!("ffprobe failed to get video duration");
-    }
-
-    let duration_str = String::from_utf8(output.stdout)
-        .context("Invalid ffprobe output")?
-        .trim()
-        .to_string();
-
-    logger::append_log_entry(
-        app_handle,
-        window,
-        task_id,
-        "ffprobe",
-        &format!("Raw duration output: {}", duration_str),
-    )
-    .await?;
-
-    duration_str
-        .parse::<f32>()
-        .context("Failed to parse duration")
-}
-
-/// Parse ffmpeg progress output
-fn parse_progress(line: &str, total_duration: f32) -> Option<f32> {
-    // ffmpeg outputs "out_time_ms=..." for progress
-    if line.starts_with("out_time_ms=") {
-        let time_str = line.strip_prefix("out_time_ms=")?;
-        let time_microseconds: i64 = time_str.parse().ok()?;
-        let time_seconds = time_microseconds as f32 / 1_000_000.0;
-        let progress = (time_seconds / total_duration * 100.0).min(100.0);
-        return Some(progress);
-    }
-    None
 }

@@ -1,6 +1,11 @@
-export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed'
+export type TaskStatus =
+  | 'pending'
+  | 'processing'
+  | 'transcribing'
+  | 'completed'
+  | 'failed'
 
-export type LogType = 'metadata' | 'ffprobe' | 'ffmpeg' | 'error'
+export type LogType = 'metadata' | 'ffprobe' | 'ffmpeg' | 'assemblyai' | 'error'
 
 export interface LogEntry {
   timestamp: string
@@ -13,8 +18,8 @@ export interface ExtractionTask {
   fileName: string
   filePath: string
   status: TaskStatus
-  progress: number // 0-100
   outputPath?: string
+  transcriptPath?: string
   error?: string
   startTime?: number
   endTime?: number
@@ -26,11 +31,6 @@ export interface ExtractionState {
   outputFolder: string | null
   lastOutputPath: string | null
   isProcessing: boolean
-}
-
-export interface ProgressEvent {
-  taskId: string
-  progress: number
 }
 
 export interface TaskCompleteEvent {
@@ -54,18 +54,41 @@ export interface TaskLogEvent {
   message: string
 }
 
+export interface TranscriptionStartedEvent {
+  taskId: string
+}
+
+export interface TranscriptionPollingEvent {
+  taskId: string
+  status: string
+}
+
+export interface TranscriptionCompleteEvent {
+  taskId: string
+  /** Path to the temporary extracted audio file (will be cleaned up after transcription) */
+  audioPath: string
+  /** Path to the final SRT transcript file */
+  transcriptPath: string
+}
+
 export type ExtractionAction =
   | {
       type: 'ADD_TASKS'
-      tasks: Array<Omit<ExtractionTask, 'id' | 'status' | 'progress' | 'logs'>>
+      tasks: Array<Omit<ExtractionTask, 'id' | 'status' | 'logs'>>
     }
   | { type: 'SET_OUTPUT_FOLDER'; folder: string }
   | { type: 'SET_LAST_OUTPUT_PATH'; path: string | null }
   | { type: 'START_PROCESSING' }
   | { type: 'STOP_PROCESSING' }
-  | { type: 'UPDATE_TASK_PROGRESS'; taskId: string; progress: number }
   | { type: 'TASK_STARTED'; taskId: string }
+  | { type: 'TASK_TRANSCRIBING'; taskId: string }
   | { type: 'TASK_COMPLETED'; taskId: string; outputPath: string }
+  | {
+      type: 'TASK_TRANSCRIPTION_COMPLETE'
+      taskId: string
+      audioPath: string
+      transcriptPath: string
+    }
   | { type: 'TASK_FAILED'; taskId: string; error: string }
   | { type: 'REMOVE_TASK'; taskId: string }
   | { type: 'CLEAR_COMPLETED' }

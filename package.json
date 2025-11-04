@@ -7,13 +7,11 @@
     "build": "vite build",
     "serve": "vite preview",
     "test": "vitest run",
-    "lint": "eslint",
     "check": "prettier --write . && eslint --fix",
     "tauri": "tauri"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@t3-oss/env-core": "^0.13.8",
     "@tailwindcss/vite": "^4.1.16",

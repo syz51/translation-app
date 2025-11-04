@@ -26,6 +26,7 @@ function TaskDetailsPage() {
   const { getTaskLogs } = useExtractionCommands()
   const [historicalLogs, setHistoricalLogs] = useState<Array<LogEntry>>([])
   const [isLoadingLogs, setIsLoadingLogs] = useState(true)
+  const [now, setNow] = useState(Date.now())
 
   const task = state.tasks.find((t) => t.id === taskId)
 
@@ -44,6 +45,20 @@ function TaskDetailsPage() {
 
     loadLogs()
   }, [taskId, getTaskLogs])
+
+  // Update time every second for in-progress tasks
+  useEffect(() => {
+    if (
+      task &&
+      (task.status === 'processing' || task.status === 'transcribing')
+    ) {
+      const interval = setInterval(() => {
+        setNow(Date.now())
+      }, 1000)
+
+      return () => clearInterval(interval)
+    }
+  }, [task?.status])
 
   if (!task) {
     return (
@@ -93,13 +108,13 @@ function TaskDetailsPage() {
 
   const getDuration = () => {
     if (!task.startTime) return null
-    const endTime = task.endTime || Date.now()
+    const endTime = task.endTime || now
     const duration = Math.round((endTime - task.startTime) / 1000)
     return `${duration}s`
   }
 
   // Combine historical logs with real-time logs from context
-  const allLogs = [...historicalLogs, ...task.logs]
+  const allLogs = task.logs.length > 0 ? task.logs : historicalLogs
 
   return (
     <div className="min-h-screen bg-linear-to-b from-slate-900 via-slate-800 to-slate-900 text-white">
@@ -130,11 +145,6 @@ function TaskDetailsPage() {
                 {getDuration() && (
                   <span className="text-sm text-muted-foreground">
                     Duration: {getDuration()}
-                  </span>
-                )}
-                {task.status === 'processing' && (
-                  <span className="text-sm text-muted-foreground">
-                    Progress: {Math.round(task.progress)}%
                   </span>
                 )}
               </div>

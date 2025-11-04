@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type { ExtractionTask, LogEntry } from '@/types/extraction'
+import { env } from '@/env'
 
 export function useExtractionCommands() {
   const selectVideoFiles = async (): Promise<Array<string>> => {
@@ -51,6 +52,13 @@ export function useExtractionCommands() {
     }
   }
 
+  /**
+   * Starts the extraction and transcription pipeline.
+   * This will:
+   * 1. Extract audio from video files to WAV format
+   * 2. Upload audio to AssemblyAI for transcription
+   * 3. Generate SRT subtitle files
+   */
   const startExtraction = async (
     tasks: Array<ExtractionTask>,
     outputFolder: string,
@@ -62,9 +70,10 @@ export function useExtractionCommands() {
           filePath: task.filePath,
         })),
         outputFolder,
+        apiKey: env.VITE_ASSEMBLYAI_API_KEY,
       })
     } catch (error) {
-      console.error('Failed to start extraction:', error)
+      console.error('Failed to start extraction and transcription:', error)
       throw error
     }
   }

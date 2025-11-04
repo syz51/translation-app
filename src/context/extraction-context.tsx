@@ -24,7 +24,6 @@ function extractionReducer(
         ...task,
         id: crypto.randomUUID(),
         status: 'pending' as const,
-        progress: 0,
         logs: [],
       }))
       return {
@@ -57,22 +56,22 @@ function extractionReducer(
         isProcessing: false,
       }
 
-    case 'UPDATE_TASK_PROGRESS':
-      return {
-        ...state,
-        tasks: state.tasks.map((task) =>
-          task.id === action.taskId
-            ? { ...task, progress: action.progress }
-            : task,
-        ),
-      }
-
     case 'TASK_STARTED':
       return {
         ...state,
         tasks: state.tasks.map((task) =>
           task.id === action.taskId
             ? { ...task, status: 'processing' as const, startTime: Date.now() }
+            : task,
+        ),
+      }
+
+    case 'TASK_TRANSCRIBING':
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId
+            ? { ...task, status: 'transcribing' as const }
             : task,
         ),
       }
@@ -85,8 +84,23 @@ function extractionReducer(
             ? {
                 ...task,
                 status: 'completed' as const,
-                progress: 100,
                 outputPath: action.outputPath,
+                endTime: Date.now(),
+              }
+            : task,
+        ),
+      }
+
+    case 'TASK_TRANSCRIPTION_COMPLETE':
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId
+            ? {
+                ...task,
+                status: 'completed' as const,
+                outputPath: action.transcriptPath, // Use transcript path as the main output (audio is temp and gets cleaned up)
+                transcriptPath: action.transcriptPath,
                 endTime: Date.now(),
               }
             : task,

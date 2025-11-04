@@ -1,7 +1,6 @@
-import { CheckCircle2, Clock, Play, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, Loader2, Play, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
 import { useExtraction } from '@/context/extraction-context'
 import { useExtractionCommands } from '@/hooks/use-extraction-commands'
 
@@ -17,10 +16,10 @@ export function ProgressSummary() {
   const processingTasks = state.tasks.filter(
     (t) => t.status === 'processing',
   ).length
+  const transcribingTasks = state.tasks.filter(
+    (t) => t.status === 'transcribing',
+  ).length
   const pendingTasks = state.tasks.filter((t) => t.status === 'pending').length
-
-  const overallProgress =
-    totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
 
   const canStart =
     totalTasks > 0 &&
@@ -65,10 +64,10 @@ export function ProgressSummary() {
           )}
         </div>
 
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-3">
           <div className="flex items-center gap-2">
-            <div className="rounded-full bg-blue-500/10 p-2">
-              <Clock className="h-4 w-4 text-blue-500" />
+            <div className="rounded-full bg-gray-500/10 p-2">
+              <Clock className="h-4 w-4 text-gray-500" />
             </div>
             <div>
               <p className="text-2xl font-bold">{pendingTasks}</p>
@@ -77,12 +76,22 @@ export function ProgressSummary() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="rounded-full bg-yellow-500/10 p-2">
-              <Play className="h-4 w-4 text-yellow-500" />
+            <div className="rounded-full bg-blue-500/10 p-2">
+              <Play className="h-4 w-4 text-blue-500" />
             </div>
             <div>
               <p className="text-2xl font-bold">{processingTasks}</p>
-              <p className="text-xs text-muted-foreground">Processing</p>
+              <p className="text-xs text-muted-foreground">Extracting</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="rounded-full bg-purple-500/10 p-2">
+              <Loader2 className="h-4 w-4 text-purple-500" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{transcribingTasks}</p>
+              <p className="text-xs text-muted-foreground">Transcribing</p>
             </div>
           </div>
 
@@ -107,19 +116,9 @@ export function ProgressSummary() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Overall Progress</span>
-            <span className="font-medium">
-              {completedTasks} / {totalTasks} ({Math.round(overallProgress)}%)
-            </span>
-          </div>
-          <Progress value={overallProgress} />
-        </div>
-
         {!state.outputFolder && totalTasks > 0 && (
           <p className="text-sm text-amber-600">
-            Please select an output folder to start extraction
+            Please select an output folder to start processing
           </p>
         )}
 
@@ -129,7 +128,9 @@ export function ProgressSummary() {
           className="w-full"
           size="lg"
         >
-          {state.isProcessing ? 'Processing...' : 'Start Extraction'}
+          {state.isProcessing
+            ? 'Processing...'
+            : 'Start Extraction & Transcription'}
         </Button>
       </div>
     </Card>

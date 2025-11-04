@@ -56,6 +56,8 @@ export function LogViewer({ logs }: LogViewerProps) {
         return 'text-purple-400'
       case 'ffmpeg':
         return 'text-green-400'
+      case 'assemblyai':
+        return 'text-orange-400'
       case 'error':
         return 'text-red-400'
       default:
@@ -71,6 +73,8 @@ export function LogViewer({ logs }: LogViewerProps) {
         return 'PROBE'
       case 'ffmpeg':
         return 'FFMPEG'
+      case 'assemblyai':
+        return 'ASSEMBLYAI'
       case 'error':
         return 'ERROR'
       default:
@@ -110,7 +114,7 @@ export function LogViewer({ logs }: LogViewerProps) {
       >
         {logs.map((log, index) => (
           <div
-            key={index}
+            key={`${log.timestamp}-${index}`}
             className="flex gap-2 border-b border-slate-800 pb-1 last:border-0"
           >
             <span className="text-slate-500">

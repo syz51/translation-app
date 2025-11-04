@@ -1,319 +1,273 @@
-Welcome to your new TanStack app!
+# Translation App
 
-# Getting Started
+A desktop application for extracting audio from video files and generating accurate transcripts using AssemblyAI's speech recognition API.
 
-To run this application:
+## Features
+
+- **Video-to-Audio Extraction:** Extract high-quality WAV audio from video files using FFmpeg
+- **Automatic Transcription:** Generate SRT subtitle files using AssemblyAI's speech recognition
+- **Batch Processing:** Process up to 4 videos in parallel for maximum efficiency
+- **Real-time Logging:** Monitor FFmpeg and AssemblyAI progress with detailed logs
+- **Cross-platform:** Works on Windows, macOS, and Linux
+- **Network Resilience:** Automatic retry with exponential backoff for network failures
+
+## Prerequisites
+
+1. **Rust:** Install the Rust toolchain from [rustup.rs](https://rustup.rs/)
+2. **Node.js & pnpm:** Install [pnpm](https://pnpm.io/) package manager
+3. **AssemblyAI API Key:** Get your free API key from [AssemblyAI](https://www.assemblyai.com/)
+
+## Installation
+
+1. Clone the repository:
+
+```bash
+git clone <repository-url>
+cd translation-app
+```
+
+2. Install dependencies:
 
 ```bash
 pnpm install
-pnpm start
 ```
 
-# Building For Production
+3. Create a `.env` file in the project root:
 
-To build this application for production:
+```env
+VITE_ASSEMBLYAI_API_KEY=your_api_key_here
+```
+
+Get your API key from [https://www.assemblyai.com/](https://www.assemblyai.com/)
+
+## Running the App
+
+### Development Mode
+
+Start the app with hot-reload for development:
 
 ```bash
+pnpm tauri dev
+```
+
+This will:
+
+- Start the Vite dev server on port 1420
+- Launch the Tauri desktop app
+- Enable hot module replacement for the frontend
+
+### Production Build
+
+Build the production version:
+
+```bash
+pnpm tauri build
+```
+
+The built application will be in `src-tauri/target/release/bundle/`
+
+## Usage
+
+1. **Launch the Application**
+   - In development: `pnpm tauri dev`
+   - Or run the built executable
+
+2. **Add Videos**
+   - Click "Add Videos" button
+   - Select one or more video files
+   - Supported formats: MP4, AVI, MKV, MOV, WMV, FLV, WebM, M4V, MPG, MPEG
+
+3. **Choose Output Folder**
+   - Click "Select Output Folder"
+   - Choose where to save the SRT subtitle files
+
+4. **Start Processing**
+   - Click "Start Extraction & Transcription"
+   - The app will:
+     - Extract audio from each video (16kHz, mono, WAV)
+     - Upload to AssemblyAI
+     - Generate SRT subtitle files
+     - Save them in your output folder
+
+5. **Monitor Progress**
+   - Watch real-time status for each file
+   - View detailed logs by clicking "View Details"
+   - See separate counts for extracting and transcribing tasks
+
+## Architecture
+
+### Tech Stack
+
+- **Frontend:** React 19 with TanStack Router (file-based routing)
+- **Desktop Wrapper:** Tauri v2 (Rust-based native app)
+- **Build Tool:** Vite with Tailwind CSS v4
+- **Audio Extraction:** FFmpeg (bundled as external binary)
+- **Transcription:** AssemblyAI API (EU endpoint)
+- **State Management:** React Context API
+- **UI Components:** Shadcn UI
+
+### Pipeline Flow
+
+```
+Video File → FFmpeg → Temp WAV → AssemblyAI Upload →
+Transcription → Poll Status → Download SRT → Cleanup Temp File
+```
+
+1. **Audio Extraction (FFmpeg)**
+   - Extracts audio track from video
+   - Converts to 16kHz mono WAV (optimized for speech)
+   - Saves to temporary directory
+
+2. **Upload to AssemblyAI**
+   - Uploads WAV file to AssemblyAI's EU endpoint
+   - Receives upload URL
+
+3. **Create Transcription**
+   - Submits transcription request
+   - Receives transcript ID
+
+4. **Poll for Completion**
+   - Polls every 3 seconds
+   - Max 30 minutes timeout (600 attempts)
+   - Automatic retry on network errors
+
+5. **Download SRT**
+   - Downloads completed transcript as SRT file
+   - Saves to user's chosen output folder
+
+6. **Cleanup**
+   - Removes temporary WAV file on success
+   - Keeps temp file for debugging on failure
+
+### Key Files
+
+- `src/routes/` - Frontend pages (file-based routing)
+- `src/components/` - React UI components
+- `src/context/extraction-context.tsx` - State management
+- `src/types/extraction.ts` - TypeScript type definitions
+- `src-tauri/src/lib.rs` - Main Rust entry point
+- `src-tauri/src/ffmpeg.rs` - FFmpeg audio extraction logic
+- `src-tauri/src/assemblyai.rs` - AssemblyAI API integration
+- `src-tauri/src/logger.rs` - Structured logging system
+
+## Development
+
+### Commands
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start dev server only (without Tauri)
+pnpm dev
+
+# Start Tauri app in dev mode
+pnpm tauri dev
+
+# Build for production
 pnpm build
-```
+pnpm tauri build
 
-## Testing
+# Preview production build
+pnpm serve
 
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
-
-```bash
+# Run tests
 pnpm test
-```
 
-## Styling
-
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-## Linting & Formatting
-
-This project uses [eslint](https://eslint.org/) and [prettier](https://prettier.io/) for linting and formatting. Eslint is configured using [tanstack/eslint-config](https://tanstack.com/config/latest/docs/eslint). The following scripts are available:
-
-```bash
+# Lint code
 pnpm lint
+
+# Format code
 pnpm format
+
+# Run both linter and formatter
 pnpm check
+
+# Add UI components
+pnpx shadcn@latest add <component-name>
 ```
 
-## Shadcn
+### Environment Variables
 
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
+All environment variables must be prefixed with `VITE_` for client-side access.
 
-```bash
-pnpx shadcn@latest add button
+Required variables:
+
+- `VITE_ASSEMBLYAI_API_KEY` - Your AssemblyAI API key
+
+Environment variables are validated using Zod schemas in `src/env.ts`.
+
+### Path Aliases
+
+- `@/*` maps to `./src/*` (configured in `tsconfig.json`)
+
+## Configuration
+
+### AssemblyAI Settings
+
+The app uses the EU endpoint by default for GDPR compliance:
+
+```rust
+const ASSEMBLYAI_API_BASE: &str = "https://api.eu.assemblyai.com";
 ```
 
-## T3Env
+To change to the US endpoint, modify `src-tauri/src/assemblyai.rs`.
 
-- You can use T3Env to add type safety to your environment variables.
-- Add Environment variables to the `src/env.mjs` file.
-- Use the environment variables in your code.
+### FFmpeg Settings
 
-### Usage
+Audio extraction settings in `src-tauri/src/ffmpeg.rs`:
 
-```ts
-import { env } from '@/env'
+- Sample rate: 16kHz (optimal for speech recognition)
+- Channels: Mono (1 channel)
+- Codec: PCM 16-bit (`pcm_s16le`)
 
-console.log(env.VITE_APP_TITLE)
-```
+### Retry Configuration
 
-## Routing
+Network retry settings in `src-tauri/src/assemblyai.rs`:
 
-This project uses [TanStack Router](https://tanstack.com/router). The initial setup is a file based router. Which means that the routes are managed as files in `src/routes`.
+- Max retries: 3 attempts
+- Initial delay: 1 second
+- Backoff: Exponential (1s → 2s → 4s)
 
-### Adding A Route
+## Troubleshooting
 
-To add a new route to your application just add another a new file in the `./src/routes` directory.
+### "Invalid API key" error
 
-TanStack will automatically generate the content of the route file for you.
+- Verify your `.env` file contains `VITE_ASSEMBLYAI_API_KEY=your_actual_key`
+- Check that your API key is valid at [AssemblyAI Dashboard](https://www.assemblyai.com/app)
+- Restart the app after changing `.env`
 
-Now that you have two routes you can use a `Link` component to navigate between them.
+### FFmpeg not found (development)
 
-### Adding Links
+- Install FFmpeg on your system: [ffmpeg.org](https://ffmpeg.org/download.html)
+- Ensure `ffmpeg` is in your system PATH
+- On Windows: Add FFmpeg to PATH and restart terminal
 
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
+### Transcription timeout
 
-```tsx
-import { Link } from '@tanstack/react-router'
-```
+- Videos longer than 30 minutes may timeout
+- Check your internet connection
+- Verify AssemblyAI service status
 
-Then anywhere in your JSX you can use it like so:
+### Temp files not cleaned up
 
-```tsx
-<Link to="/about">About</Link>
-```
+- Temp files are preserved on transcription failure for debugging
+- Location: `{system_temp}/translation-app-audio/`
+- Safe to manually delete if space is needed
 
-This will create a link that will navigate to the `/about` route.
+## Contributing
 
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
+1. Follow the existing code style
+2. Run `pnpm check` before committing
+3. Update documentation for new features
+4. Add tests where applicable
 
-### Using A Layout
+## License
 
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you use the `<Outlet />` component.
+[Your License Here]
 
-Here is an example layout that includes a header:
+## Credits
 
-```tsx
-import { Outlet, createRootRoute } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-
-import { Link } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  component: () => (
-    <>
-      <header>
-        <nav>
-          <Link to="/">Home</Link>
-          <Link to="/about">About</Link>
-        </nav>
-      </header>
-      <Outlet />
-      <TanStackRouterDevtools />
-    </>
-  ),
-})
-```
-
-The `<TanStackRouterDevtools />` component is not required so you can remove it if you don't want it in your layout.
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-const peopleRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/people',
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json() as Promise<{
-      results: {
-        name: string
-      }[]
-    }>
-  },
-  component: () => {
-    const data = peopleRoute.useLoaderData()
-    return (
-      <ul>
-        {data.results.map((person) => (
-          <li key={person.name}>{person.name}</li>
-        ))}
-      </ul>
-    )
-  },
-})
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-### React-Query
-
-React-Query is an excellent addition or alternative to route loading and integrating it into you application is a breeze.
-
-First add your dependencies:
-
-```bash
-pnpm add @tanstack/react-query @tanstack/react-query-devtools
-```
-
-Next we'll need to create a query client and provider. We recommend putting those in `main.tsx`.
-
-```tsx
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-
-// ...
-
-const queryClient = new QueryClient()
-
-// ...
-
-if (!rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement)
-
-  root.render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>,
-  )
-}
-```
-
-You can also add TanStack Query Devtools to the root route (optional).
-
-```tsx
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-
-const rootRoute = createRootRoute({
-  component: () => (
-    <>
-      <Outlet />
-      <ReactQueryDevtools buttonPosition="top-right" />
-      <TanStackRouterDevtools />
-    </>
-  ),
-})
-```
-
-Now you can use `useQuery` to fetch your data.
-
-```tsx
-import { useQuery } from '@tanstack/react-query'
-
-import './App.css'
-
-function App() {
-  const { data } = useQuery({
-    queryKey: ['people'],
-    queryFn: () =>
-      fetch('https://swapi.dev/api/people')
-        .then((res) => res.json())
-        .then((data) => data.results as { name: string }[]),
-    initialData: [],
-  })
-
-  return (
-    <div>
-      <ul>
-        {data.map((person) => (
-          <li key={person.name}>{person.name}</li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-export default App
-```
-
-You can find out everything you need to know on how to use React-Query in the [React-Query documentation](https://tanstack.com/query/latest/docs/framework/react/overview).
-
-## State Management
-
-Another common requirement for React applications is state management. There are many options for state management in React. TanStack Store provides a great starting point for your project.
-
-First you need to add TanStack Store as a dependency:
-
-```bash
-pnpm add @tanstack/store
-```
-
-Now let's create a simple counter in the `src/App.tsx` file as a demonstration.
-
-```tsx
-import { useStore } from '@tanstack/react-store'
-import { Store } from '@tanstack/store'
-import './App.css'
-
-const countStore = new Store(0)
-
-function App() {
-  const count = useStore(countStore)
-  return (
-    <div>
-      <button onClick={() => countStore.setState((n) => n + 1)}>
-        Increment - {count}
-      </button>
-    </div>
-  )
-}
-
-export default App
-```
-
-One of the many nice features of TanStack Store is the ability to derive state from other state. That derived state will update when the base state updates.
-
-Let's check this out by doubling the count using derived state.
-
-```tsx
-import { useStore } from '@tanstack/react-store'
-import { Store, Derived } from '@tanstack/store'
-import './App.css'
-
-const countStore = new Store(0)
-
-const doubledStore = new Derived({
-  fn: () => countStore.state * 2,
-  deps: [countStore],
-})
-doubledStore.mount()
-
-function App() {
-  const count = useStore(countStore)
-  const doubledCount = useStore(doubledStore)
-
-  return (
-    <div>
-      <button onClick={() => countStore.setState((n) => n + 1)}>
-        Increment - {count}
-      </button>
-      <div>Doubled - {doubledCount}</div>
-    </div>
-  )
-}
-
-export default App
-```
-
-We use the `Derived` class to create a new store that is derived from another store. The `Derived` class has a `mount` method that will start the derived store updating.
-
-Once we've created the derived store we can use it in the `App` component just like we would any other store using the `useStore` hook.
-
-You can find out everything you need to know on how to use TanStack Store in the [TanStack Store documentation](https://tanstack.com/store/latest).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
+- Built with [Tauri](https://tauri.app/)
+- Transcription powered by [AssemblyAI](https://www.assemblyai.com/)
+- Audio processing via [FFmpeg](https://ffmpeg.org/)
