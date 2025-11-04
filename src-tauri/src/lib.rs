@@ -82,7 +82,8 @@ async fn extract_audio_batch(
                                         cleanup_errors.push(format!("temp audio: {}", e));
                                     }
 
-                                    if let Err(e) = tokio::fs::remove_file(&original_srt_path).await {
+                                    if let Err(e) = tokio::fs::remove_file(&original_srt_path).await
+                                    {
                                         cleanup_errors.push(format!("temp SRT: {}", e));
                                     }
 
@@ -92,7 +93,10 @@ async fn extract_audio_batch(
                                             &window_clone,
                                             &task.id,
                                             "metadata",
-                                            &format!("Warning: Cleanup errors: {}", cleanup_errors.join(", ")),
+                                            &format!(
+                                                "Warning: Cleanup errors: {}",
+                                                cleanup_errors.join(", ")
+                                            ),
                                         )
                                         .await;
                                     } else {
@@ -123,7 +127,10 @@ async fn extract_audio_batch(
                                         &window_clone,
                                         &task.id,
                                         "metadata",
-                                        &format!("Keeping temp files for debugging: audio={}, srt={}", audio_path, original_srt_path),
+                                        &format!(
+                                            "Keeping temp files for debugging: audio={}, srt={}",
+                                            audio_path, original_srt_path
+                                        ),
                                     )
                                     .await;
 
@@ -265,7 +272,7 @@ async fn cancel_extraction(task_id: String, window: Window) -> Result<(), String
     // - Cleanup of temporary files
     //
     // For now, this logs the cancellation request. Tasks will complete normally.
-    
+
     let _ = window.emit(
         "task:failed",
         TaskErrorPayload {
@@ -273,7 +280,7 @@ async fn cancel_extraction(task_id: String, window: Window) -> Result<(), String
             error: "Task cancellation requested (Note: Cancellation not fully implemented - task may complete)".to_string(),
         },
     );
-    
+
     Ok(())
 }
 

@@ -58,12 +58,30 @@ export function ProgressSummary() {
     (isSrtFlow ? !!state.targetLanguage : true)
 
   const handleStart = async () => {
+    console.log('[ProgressSummary] Button clicked', {
+      canStart,
+      isSrtFlow,
+      totalTasks,
+      outputFolder: state.outputFolder,
+      targetLanguage: state.targetLanguage,
+      pendingTasks,
+      isProcessing: state.isProcessing,
+    })
+
     if (!canStart || !state.outputFolder) return
 
     dispatch({ type: 'START_PROCESSING' })
     try {
       if (isSrtFlow && state.targetLanguage) {
         // SRT translation flow
+        console.log('[ProgressSummary] Starting SRT translation', {
+          tasks: state.tasks.map((t) => ({
+            taskId: t.id,
+            filePath: t.filePath,
+          })),
+          outputFolder: state.outputFolder,
+          targetLanguage: state.targetLanguage,
+        })
         await startTranslation(
           state.tasks.map((t) => ({ taskId: t.id, filePath: t.filePath })),
           state.outputFolder,

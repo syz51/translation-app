@@ -23,15 +23,30 @@ export function useSrtTranslationCommands() {
     outputFolder: string,
     targetLanguage: string,
   ) => {
-    await invoke('translate_srt_batch', {
-      tasks: tasks.map((t) => ({
-        id: t.taskId,
-        file_path: t.filePath,
-      })),
+    console.log('[useSrtTranslationCommands] Starting translation with:', {
+      tasks,
       outputFolder,
       targetLanguage,
       translationServerUrl: env.VITE_TRANSLATION_SERVER_URL,
     })
+
+    try {
+      await invoke('translate_srt_batch', {
+        tasks: tasks.map((t) => ({
+          id: t.taskId,
+          filePath: t.filePath,
+        })),
+        outputFolder,
+        targetLanguage,
+        translationServerUrl: env.VITE_TRANSLATION_SERVER_URL,
+      })
+      console.log(
+        '[useSrtTranslationCommands] Translation started successfully',
+      )
+    } catch (error) {
+      console.error('[useSrtTranslationCommands] Translation failed:', error)
+      throw error
+    }
   }
 
   return { selectSrtFiles, startTranslation }
