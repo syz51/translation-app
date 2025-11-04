@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Window};
+use tauri::{AppHandle, Emitter, Manager, Window};
 
 const ASSEMBLYAI_API_BASE: &str = "https://api.eu.assemblyai.com";
 const POLL_INTERVAL_SECS: u64 = 3;
@@ -415,11 +415,11 @@ async fn poll_transcript_status(
     }
 }
 
-/// Download SRT subtitle file
+/// Download SRT subtitle file to temp folder with -original.srt suffix
 async fn download_srt(
     api_key: &str,
     transcript_id: &str,
-    output_path: &str,
+    temp_srt_path: &str,
     task_id: &str,
     window: &Window,
     app_handle: &AppHandle,
@@ -430,7 +430,7 @@ async fn download_srt(
         window,
         task_id,
         "metadata",
-        "Downloading SRT subtitle file...",
+        "Downloading original SRT subtitle file to temp folder...",
     )
     .await?;
 
@@ -476,8 +476,8 @@ async fn download_srt(
     )
     .await?;
 
-    // Write SRT file
-    tokio::fs::write(output_path, srt_content)
+    // Write SRT file to temp location
+    tokio::fs::write(temp_srt_path, srt_content)
         .await
         .context("Failed to write SRT file")?;
 
@@ -486,7 +486,7 @@ async fn download_srt(
         window,
         task_id,
         "assemblyai",
-        &format!("SRT file saved: {} (ID: {})", output_path, transcript_id),
+        &format!("Original SRT file saved to temp: {} (ID: {})", temp_srt_path, transcript_id),
     )
     .await?;
 
@@ -494,12 +494,12 @@ async fn download_srt(
 }
 
 /// Main transcription orchestration function
+/// Returns the path to the original SRT file in the temp directory (for translation)
 pub async fn transcribe_audio(
     api_key: &str,
     task_id: &str,
     audio_path: &str,
     original_file_path: &str,
-    output_folder: &str,
     window: &Window,
     app_handle: &AppHandle,
 ) -> Result<String> {
@@ -511,11 +511,20 @@ pub async fn transcribe_audio(
         .to_str()
         .context("Invalid file name")?;
 
-    // Create output path for SRT file
-    let srt_path = Path::new(output_folder).join(format!("{}.srt", file_stem));
-    let srt_path_str = srt_path
+    // Create temp directory for original SRT (will be translated later)
+    let temp_dir = app_handle
+        .path()
+        .temp_dir()
+        .context("Failed to get temp directory")?;
+    
+    let srt_temp_dir = temp_dir.join("translation-app-srt");
+    std::fs::create_dir_all(&srt_temp_dir).context("Failed to create SRT temp directory")?;
+    
+    // Save with -original.srt suffix in temp folder
+    let temp_srt_path = srt_temp_dir.join(format!("{}_{}-original.srt", task_id, file_stem));
+    let temp_srt_path_str = temp_srt_path
         .to_str()
-        .context("Invalid SRT output path")?
+        .context("Invalid temp SRT path")?
         .to_string();
 
     // Ensure initial log is written before starting
@@ -549,11 +558,11 @@ pub async fn transcribe_audio(
     // Step 3: Poll until complete
     poll_transcript_status(api_key, &transcript_id, task_id, window, app_handle).await?;
 
-    // Step 4: Download SRT
+    // Step 4: Download SRT to temp folder
     download_srt(
         api_key,
         &transcript_id,
-        &srt_path_str,
+        &temp_srt_path_str,
         task_id,
         window,
         app_handle,
@@ -565,21 +574,12 @@ pub async fn transcribe_audio(
         window,
         task_id,
         "metadata",
-        "Transcription pipeline completed successfully!",
+        "Transcription completed! Original SRT ready for translation.",
     )
     .await?;
 
-    // Emit completion event - this marks the entire task as complete
-    window
-        .emit(
-            "transcription:complete",
-            TranscriptionCompletePayload {
-                task_id: task_id.to_string(),
-                audio_path: audio_path.to_string(),
-                transcript_path: srt_path_str.clone(),
-            },
-        )
-        .context("Failed to emit transcription:complete event")?;
+    // Don't emit transcription:complete here anymore - translation will handle final completion
+    // Return the temp SRT path for translation
 
-    Ok(srt_path_str)
+    Ok(temp_srt_path_str)
 }

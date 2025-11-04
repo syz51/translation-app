@@ -1,6 +1,7 @@
 mod assemblyai;
 mod ffmpeg;
 mod logger;
+mod translation;
 
 use ffmpeg::{extract_audio_to_wav, TaskErrorPayload, TaskInfo};
 use serde::Serialize;
@@ -20,6 +21,8 @@ async fn extract_audio_batch(
     tasks: Vec<TaskInfo>,
     output_folder: String,
     api_key: String,
+    target_language: String,
+    translation_server_url: String,
     window: Window,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
@@ -33,6 +36,8 @@ async fn extract_audio_batch(
         let output_folder_clone = output_folder.clone();
         let app_handle_clone = app_handle.clone();
         let api_key_clone = api_key.clone();
+        let target_language_clone = target_language.clone();
+        let translation_server_url_clone = translation_server_url.clone();
 
         let handle = tokio::spawn(async move {
             // Step 1: Extract audio to temp directory
@@ -42,45 +47,98 @@ async fn extract_audio_batch(
 
             match extraction_result {
                 Ok(audio_path) => {
-                    // Step 2: Transcribe audio
+                    // Step 2: Transcribe audio (returns temp SRT path)
                     let transcription_result = assemblyai::transcribe_audio(
                         &api_key_clone,
                         &task.id,
                         &audio_path,
                         &task.file_path,
-                        &output_folder_clone,
                         &window_clone,
                         &app_handle_clone,
                     )
                     .await;
 
-                    // Handle transcription result
                     match transcription_result {
-                        Ok(_) => {
-                            // Success: Clean up the temporary audio file
-                            if let Err(e) = tokio::fs::remove_file(&audio_path).await {
-                                // Log cleanup error but don't fail the task
-                                let _ = logger::append_log_entry(
-                                    &app_handle_clone,
-                                    &window_clone,
-                                    &task.id,
-                                    "metadata",
-                                    &format!("Warning: Failed to cleanup temp audio file: {}", e),
-                                )
-                                .await;
-                            } else {
-                                let _ = logger::append_log_entry(
-                                    &app_handle_clone,
-                                    &window_clone,
-                                    &task.id,
-                                    "metadata",
-                                    "Temporary audio file cleaned up successfully",
-                                )
-                                .await;
+                        Ok(original_srt_path) => {
+                            // Step 3: Translate SRT (with fallback to original on failure)
+                            let translation_result = translation::translate_srt(
+                                &translation_server_url_clone,
+                                &task.id,
+                                &original_srt_path,
+                                &target_language_clone,
+                                &output_folder_clone,
+                                &task.file_path,
+                                &window_clone,
+                                &app_handle_clone,
+                            )
+                            .await;
+
+                            match translation_result {
+                                Ok(_final_srt_path) => {
+                                    // Success: Clean up temp audio and temp original SRT
+                                    let mut cleanup_errors = Vec::new();
+
+                                    if let Err(e) = tokio::fs::remove_file(&audio_path).await {
+                                        cleanup_errors.push(format!("temp audio: {}", e));
+                                    }
+
+                                    if let Err(e) = tokio::fs::remove_file(&original_srt_path).await {
+                                        cleanup_errors.push(format!("temp SRT: {}", e));
+                                    }
+
+                                    if !cleanup_errors.is_empty() {
+                                        let _ = logger::append_log_entry(
+                                            &app_handle_clone,
+                                            &window_clone,
+                                            &task.id,
+                                            "metadata",
+                                            &format!("Warning: Cleanup errors: {}", cleanup_errors.join(", ")),
+                                        )
+                                        .await;
+                                    } else {
+                                        let _ = logger::append_log_entry(
+                                            &app_handle_clone,
+                                            &window_clone,
+                                            &task.id,
+                                            "metadata",
+                                            "All temporary files cleaned up successfully",
+                                        )
+                                        .await;
+                                    }
+                                }
+                                Err(e) => {
+                                    // Translation failed catastrophically (even fallback failed)
+                                    let _ = logger::append_log_entry(
+                                        &app_handle_clone,
+                                        &window_clone,
+                                        &task.id,
+                                        "error",
+                                        &format!("Translation and fallback both failed: {}", e),
+                                    )
+                                    .await;
+
+                                    // Keep temp files for debugging
+                                    let _ = logger::append_log_entry(
+                                        &app_handle_clone,
+                                        &window_clone,
+                                        &task.id,
+                                        "metadata",
+                                        &format!("Keeping temp files for debugging: audio={}, srt={}", audio_path, original_srt_path),
+                                    )
+                                    .await;
+
+                                    let _ = window_clone.emit(
+                                        "task:failed",
+                                        TaskErrorPayload {
+                                            task_id: task.id.clone(),
+                                            error: format!("Translation failed: {}", e),
+                                        },
+                                    );
+                                }
                             }
                         }
                         Err(e) => {
-                            // Transcription failed: Keep temp file for debugging
+                            // Transcription failed: Keep temp audio file for debugging
                             let _ = logger::append_log_entry(
                                 &app_handle_clone,
                                 &window_clone,
