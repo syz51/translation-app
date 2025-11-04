@@ -8,6 +8,9 @@ export const Route = createRootRoute({
   component: RootComponent,
 })
 
+// Check if running in Tauri (desktop app)
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+
 function RootComponentContent() {
   // Set up event listeners for all routes
   useExtractionEvents()
@@ -15,17 +18,19 @@ function RootComponentContent() {
   return (
     <>
       <Outlet />
-      <TanStackDevtools
-        config={{
-          position: 'bottom-right',
-        }}
-        plugins={[
-          {
-            name: 'Tanstack Router',
-            render: <TanStackRouterDevtoolsPanel />,
-          },
-        ]}
-      />
+      {!isTauri && (
+        <TanStackDevtools
+          config={{
+            position: 'bottom-right',
+          }}
+          plugins={[
+            {
+              name: 'Tanstack Router',
+              render: <TanStackRouterDevtoolsPanel />,
+            },
+          ]}
+        />
+      )}
     </>
   )
 }
