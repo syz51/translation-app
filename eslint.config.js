@@ -2,4 +2,15 @@
 
 import { tanstackConfig } from '@tanstack/eslint-config'
 
-export default [...tanstackConfig]
+export default [
+  ...tanstackConfig,
+  {
+    name: 'local/ignores',
+    ignores: [
+      '**/.output/**',
+      '**/.nitro/**',
+      'eslint.config.js',
+      'prettier.config.js',
+    ],
+  },
+]

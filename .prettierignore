@@ -1,3 +1,9 @@
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
+src-tauri/gen
+src-tauri/target
+**/*.lock
+.output
+.nitro
+dist
