@@ -6,6 +6,16 @@ use tauri::{AppHandle, Emitter, Window};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+// Windows-specific imports for hiding console window
+// The CommandExt trait is required for the creation_flags method
+#[cfg(target_os = "windows")]
+#[allow(unused_imports)]
+use std::os::windows::process::CommandExt;
+
+// CREATE_NO_WINDOW flag to prevent console window from appearing
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskInfo {
     pub id: String,
@@ -54,13 +64,34 @@ fn get_binary_path(app_handle: &AppHandle, binary_name: &str) -> Result<PathBuf>
         return Ok(PathBuf::from(binary_name));
     }
 
-    // In production, use the bundled binary
-    // For externalBin on macOS, binaries are placed in Contents/MacOS/
-    // Resources is at Contents/Resources, so we go up to Contents, then into MacOS
-    let sidecar_path = app_handle
+    // In production, resolve externalBin from the app directory
+    // For externalBin, Tauri places binaries in:
+    // - Windows: same directory as .exe
+    // - macOS: Contents/MacOS/
+    // - Linux: same directory as executable
+
+    // Add .exe extension on Windows
+    let binary_name_with_ext = if cfg!(target_os = "windows") {
+        format!("{}.exe", binary_name)
+    } else {
+        binary_name.to_string()
+    };
+
+    // Get the app's executable directory
+    let exe_dir = app_handle
         .path()
-        .resolve(binary_name, tauri::path::BaseDirectory::Resource)
-        .context("Failed to resolve sidecar path")?;
+        .resolve("", tauri::path::BaseDirectory::Resource)
+        .context("Failed to resolve exe path")?;
+
+    // On macOS, externalBin is in MacOS folder (sibling to Resources)
+    #[cfg(target_os = "macos")]
+    let binary_dir = exe_dir.join("MacOS");
+
+    // On Windows and Linux, externalBin is in the same directory as the exe
+    #[cfg(not(target_os = "macos"))]
+    let binary_dir = exe_dir;
+
+    let sidecar_path = binary_dir.join(&binary_name_with_ext);
 
     if !sidecar_path.exists() {
         anyhow::bail!(
@@ -112,8 +143,8 @@ pub async fn extract_audio_to_wav(
     let ffmpeg_path = get_binary_path(app_handle, "ffmpeg")?;
 
     // Build ffmpeg command
-    let mut child = Command::new(ffmpeg_path)
-        .arg("-i")
+    let mut cmd = Command::new(ffmpeg_path);
+    cmd.arg("-i")
         .arg(input_path)
         .arg("-vn") // No video
         .arg("-acodec")
@@ -127,9 +158,13 @@ pub async fn extract_audio_to_wav(
         .arg("-progress")
         .arg("pipe:2") // Progress to stderr
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("Failed to spawn ffmpeg process")?;
+        .stderr(Stdio::piped());
+
+    // On Windows, prevent console window from appearing
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = cmd.spawn().context("Failed to spawn ffmpeg process")?;
 
     // Read stderr for progress updates
     if let Some(stderr) = child.stderr.take() {
@@ -179,17 +214,20 @@ async fn get_video_duration(input_path: &str, app_handle: &AppHandle) -> Result<
     // Get ffprobe binary path
     let ffprobe_path = get_binary_path(app_handle, "ffprobe")?;
 
-    let output = Command::new(ffprobe_path)
-        .arg("-v")
+    let mut cmd = Command::new(ffprobe_path);
+    cmd.arg("-v")
         .arg("error")
         .arg("-show_entries")
         .arg("format=duration")
         .arg("-of")
         .arg("default=noprint_wrappers=1:nokey=1")
-        .arg(input_path)
-        .output()
-        .await
-        .context("Failed to run ffprobe")?;
+        .arg(input_path);
+
+    // On Windows, prevent console window from appearing
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd.output().await.context("Failed to run ffprobe")?;
 
     if !output.status.success() {
         anyhow::bail!("ffprobe failed to get video duration");

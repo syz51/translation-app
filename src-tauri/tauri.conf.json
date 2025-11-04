@@ -31,9 +31,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": {
-      "binaries/ffmpeg": "ffmpeg",
-      "binaries/ffprobe": "ffprobe"
-    }
+    "externalBin": ["binaries/ffmpeg", "binaries/ffprobe"]
   }
 }
