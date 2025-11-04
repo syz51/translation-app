@@ -46,18 +46,27 @@ fn parse_api_error(error_text: &str, context_msg: &str) -> String {
             .unwrap_or_else(|| "Unknown error".to_string());
         return format!("{}: {}", context_msg, error_msg);
     }
-    
+
     // If not JSON, check for common error patterns
     if error_text.contains("401") || error_text.contains("Unauthorized") {
-        return format!("{}: Invalid API key. Please check your AssemblyAI API key.", context_msg);
+        return format!(
+            "{}: Invalid API key. Please check your AssemblyAI API key.",
+            context_msg
+        );
     }
     if error_text.contains("403") || error_text.contains("Forbidden") {
-        return format!("{}: Access denied. Please check your API key permissions.", context_msg);
+        return format!(
+            "{}: Access denied. Please check your API key permissions.",
+            context_msg
+        );
     }
     if error_text.contains("429") || error_text.contains("Too Many Requests") {
-        return format!("{}: Rate limit exceeded. Please try again later.", context_msg);
+        return format!(
+            "{}: Rate limit exceeded. Please try again later.",
+            context_msg
+        );
     }
-    
+
     // Default to original error text
     format!("{}: {}", context_msg, error_text)
 }
@@ -75,17 +84,17 @@ where
     Fut: std::future::Future<Output = Result<T>>,
 {
     let mut last_error = None;
-    
+
     for attempt in 0..MAX_RETRIES {
         match operation().await {
             Ok(result) => return Ok(result),
             Err(e) => {
                 last_error = Some(e);
-                
+
                 // Don't retry on the last attempt
                 if attempt < MAX_RETRIES - 1 {
                     let delay = INITIAL_RETRY_DELAY_MS * 2u64.pow(attempt);
-                    
+
                     let _ = crate::logger::append_log_entry(
                         app_handle,
                         window,
@@ -100,13 +109,13 @@ where
                         ),
                     )
                     .await;
-                    
+
                     tokio::time::sleep(Duration::from_millis(delay)).await;
                 }
             }
         }
     }
-    
+
     // All retries exhausted
     Err(last_error.unwrap())
 }
@@ -165,7 +174,7 @@ async fn upload_audio(
 
     let api_key = api_key.to_string();
     let file_bytes_clone = file_bytes.clone();
-    
+
     // Upload with retry logic
     let upload_url = retry_with_backoff(
         || {
@@ -235,7 +244,7 @@ async fn create_transcript(
 
     let api_key = api_key.to_string();
     let audio_url = audio_url.to_string();
-    
+
     // Create transcript with retry logic
     let transcript_id = retry_with_backoff(
         || {
@@ -336,7 +345,12 @@ async fn poll_transcript_status(
                         let status = response.status();
                         let error_text = response.text().await.unwrap_or_default();
                         let parsed_error = parse_api_error(&error_text, "Status polling failed");
-                        anyhow::bail!("[HTTP {}] {} (Transcript ID: {})", status, parsed_error, transcript_id);
+                        anyhow::bail!(
+                            "[HTTP {}] {} (Transcript ID: {})",
+                            status,
+                            parsed_error,
+                            transcript_id
+                        );
                     }
 
                     let transcript_response: TranscriptResponse = response
@@ -385,7 +399,10 @@ async fn poll_transcript_status(
                     window,
                     task_id,
                     "assemblyai",
-                    &format!("Transcription completed successfully! (ID: {})", transcript_id),
+                    &format!(
+                        "Transcription completed successfully! (ID: {})",
+                        transcript_id
+                    ),
                 )
                 .await?;
                 return Ok(());
@@ -394,7 +411,11 @@ async fn poll_transcript_status(
                 let error_msg = transcript_response
                     .error
                     .unwrap_or_else(|| "Unknown error".to_string());
-                anyhow::bail!("Transcription failed (ID: {}): {}", transcript_id, error_msg);
+                anyhow::bail!(
+                    "Transcription failed (ID: {}): {}",
+                    transcript_id,
+                    error_msg
+                );
             }
             "queued" | "processing" => {
                 // Continue polling
@@ -406,7 +427,10 @@ async fn poll_transcript_status(
                     window,
                     task_id,
                     "assemblyai",
-                    &format!("Unknown status: {} (ID: {})", transcript_response.status, transcript_id),
+                    &format!(
+                        "Unknown status: {} (ID: {})",
+                        transcript_response.status, transcript_id
+                    ),
                 )
                 .await?;
                 continue;
@@ -436,7 +460,7 @@ async fn download_srt(
 
     let api_key = api_key.to_string();
     let transcript_id_str = transcript_id.to_string();
-    
+
     // Download with retry logic
     let srt_content = retry_with_backoff(
         || {
@@ -458,7 +482,12 @@ async fn download_srt(
                     let status = response.status();
                     let error_text = response.text().await.unwrap_or_default();
                     let parsed_error = parse_api_error(&error_text, "SRT download failed");
-                    anyhow::bail!("[HTTP {}] {} (Transcript ID: {})", status, parsed_error, transcript_id);
+                    anyhow::bail!(
+                        "[HTTP {}] {} (Transcript ID: {})",
+                        status,
+                        parsed_error,
+                        transcript_id
+                    );
                 }
 
                 let srt_content = response
@@ -486,7 +515,10 @@ async fn download_srt(
         window,
         task_id,
         "assemblyai",
-        &format!("Original SRT file saved to temp: {} (ID: {})", temp_srt_path, transcript_id),
+        &format!(
+            "Original SRT file saved to temp: {} (ID: {})",
+            temp_srt_path, transcript_id
+        ),
     )
     .await?;
 
@@ -516,10 +548,10 @@ pub async fn transcribe_audio(
         .path()
         .temp_dir()
         .context("Failed to get temp directory")?;
-    
+
     let srt_temp_dir = temp_dir.join("translation-app-srt");
     std::fs::create_dir_all(&srt_temp_dir).context("Failed to create SRT temp directory")?;
-    
+
     // Save with -original.srt suffix in temp folder
     let temp_srt_path = srt_temp_dir.join(format!("{}_{}-original.srt", task_id, file_stem));
     let temp_srt_path_str = temp_srt_path

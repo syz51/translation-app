@@ -6,7 +6,13 @@ export type TaskStatus =
   | 'completed'
   | 'failed'
 
-export type LogType = 'metadata' | 'ffprobe' | 'ffmpeg' | 'assemblyai' | 'translation' | 'error'
+export type LogType =
+  | 'metadata'
+  | 'ffprobe'
+  | 'ffmpeg'
+  | 'assemblyai'
+  | 'translation'
+  | 'error'
 
 export interface LogEntry {
   timestamp: string
