@@ -119,9 +119,9 @@ pub async fn extract_audio_to_wav(
         .arg("-acodec")
         .arg("pcm_s16le") // WAV codec
         .arg("-ar")
-        .arg("44100") // Sample rate
+        .arg("16000") // Sample rate
         .arg("-ac")
-        .arg("2") // Stereo
+        .arg("1") // Stereo
         .arg("-y") // Overwrite output file
         .arg(&output_path_str)
         .arg("-progress")
