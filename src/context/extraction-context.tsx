@@ -23,6 +23,7 @@ function extractionReducer(
         id: crypto.randomUUID(),
         status: 'pending' as const,
         progress: 0,
+        logs: [],
       }))
       return {
         ...state,
@@ -113,6 +114,16 @@ function extractionReducer(
 
     case 'RESET':
       return initialState
+
+    case 'ADD_LOG_ENTRY':
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId
+            ? { ...task, logs: [...task.logs, action.logEntry] }
+            : task,
+        ),
+      }
 
     default:
       return state

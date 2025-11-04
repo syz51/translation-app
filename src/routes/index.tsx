@@ -4,15 +4,10 @@ import { FileSelector } from '@/components/file-selector'
 import { OutputFolderSelector } from '@/components/output-folder-selector'
 import { TaskList } from '@/components/task-list'
 import { ProgressSummary } from '@/components/progress-summary'
-import { ExtractionProvider } from '@/context/extraction-context'
-import { useExtractionEvents } from '@/hooks/use-extraction-events'
 
 export const Route = createFileRoute('/')({ component: App })
 
-function AppContent() {
-  // Set up event listeners
-  useExtractionEvents()
-
+function App() {
   return (
     <div className="min-h-screen bg-linear-to-b from-slate-900 via-slate-800 to-slate-900 text-white">
       <div className="container mx-auto max-w-6xl px-4 py-8">
@@ -59,13 +54,5 @@ function AppContent() {
         </div>
       </div>
     </div>
-  )
-}
-
-function App() {
-  return (
-    <ExtractionProvider>
-      <AppContent />
-    </ExtractionProvider>
   )
 }

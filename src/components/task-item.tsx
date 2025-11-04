@@ -1,4 +1,12 @@
-import { CheckCircle2, FileVideo, Loader2, Trash2, XCircle } from 'lucide-react'
+import {
+  CheckCircle2,
+  Eye,
+  FileVideo,
+  Loader2,
+  Trash2,
+  XCircle,
+} from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
 import type { ExtractionTask } from '@/types/extraction'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,6 +19,7 @@ interface TaskItemProps {
 
 export function TaskItem({ task }: TaskItemProps) {
   const { dispatch } = useExtraction()
+  const navigate = useNavigate()
 
   const getStatusColor = () => {
     switch (task.status) {
@@ -64,6 +73,10 @@ export function TaskItem({ task }: TaskItemProps) {
     }
   }
 
+  const handleViewDetails = () => {
+    navigate({ to: '/task/$taskId', params: { taskId: task.id } })
+  }
+
   return (
     <div className="group rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50">
       <div className="flex items-start justify-between gap-3">
@@ -109,15 +122,27 @@ export function TaskItem({ task }: TaskItemProps) {
           )}
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleRemove}
-          disabled={task.status === 'processing'}
-          className="opacity-0 transition-opacity group-hover:opacity-100"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleViewDetails}
+            className="opacity-0 transition-opacity group-hover:opacity-100"
+            title="View Details"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleRemove}
+            disabled={task.status === 'processing'}
+            className="opacity-0 transition-opacity group-hover:opacity-100"
+            title="Remove Task"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   )

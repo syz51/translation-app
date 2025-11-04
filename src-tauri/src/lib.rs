@@ -1,4 +1,5 @@
 mod ffmpeg;
+mod logger;
 
 use ffmpeg::{extract_audio_to_wav, TaskErrorPayload, TaskInfo};
 use serde::Serialize;
@@ -76,6 +77,28 @@ async fn cancel_extraction(_task_id: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn get_task_logs(
+    task_id: String,
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<logger::LogEntry>, String> {
+    logger::read_task_logs(&app_handle, &task_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_log_folder(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let logs_dir = logger::get_logs_dir(&app_handle)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    logs_dir
+        .to_str()
+        .ok_or_else(|| "Invalid log folder path".to_string())
+        .map(|s| s.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -85,7 +108,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             extract_audio_batch,
-            cancel_extraction
+            cancel_extraction,
+            get_task_logs,
+            get_log_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

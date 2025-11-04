@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
-import type { ExtractionTask } from '@/types/extraction'
+import type { ExtractionTask, LogEntry } from '@/types/extraction'
 
 export function useExtractionCommands() {
   const selectVideoFiles = async (): Promise<Array<string>> => {
@@ -78,10 +78,32 @@ export function useExtractionCommands() {
     }
   }
 
+  const getTaskLogs = async (taskId: string): Promise<Array<LogEntry>> => {
+    try {
+      const logs = await invoke<Array<LogEntry>>('get_task_logs', { taskId })
+      return logs
+    } catch (error) {
+      console.error('Failed to get task logs:', error)
+      throw error
+    }
+  }
+
+  const getLogFolder = async (): Promise<string> => {
+    try {
+      const folder = await invoke<string>('get_log_folder')
+      return folder
+    } catch (error) {
+      console.error('Failed to get log folder:', error)
+      throw error
+    }
+  }
+
   return {
     selectVideoFiles,
     selectOutputFolder,
     startExtraction,
     cancelExtraction,
+    getTaskLogs,
+    getLogFolder,
   }
 }

@@ -6,6 +6,8 @@ use tauri::{AppHandle, Emitter, Window};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+use crate::logger;
+
 // Windows-specific imports for hiding console window
 // The CommandExt trait is required for the creation_flags method
 #[cfg(target_os = "windows")]
@@ -111,6 +113,30 @@ pub async fn extract_audio_to_wav(
     window: &Window,
     app_handle: &AppHandle,
 ) -> Result<String> {
+    // Initialize task log
+    logger::init_task_log(app_handle, task_id)
+        .await
+        .context("Failed to initialize task log")?;
+
+    // Log task metadata
+    logger::append_log_entry(
+        app_handle,
+        window,
+        task_id,
+        "metadata",
+        &format!("Starting audio extraction for: {}", input_path),
+    )
+    .await?;
+
+    logger::append_log_entry(
+        app_handle,
+        window,
+        task_id,
+        "metadata",
+        &format!("Output folder: {}", output_folder),
+    )
+    .await?;
+
     // Emit task started event
     window
         .emit(
@@ -136,11 +162,47 @@ pub async fn extract_audio_to_wav(
         .context("Invalid output path")?
         .to_string();
 
+    logger::append_log_entry(
+        app_handle,
+        window,
+        task_id,
+        "metadata",
+        &format!("Output file: {}", output_path_str),
+    )
+    .await?;
+
     // Get video duration first for progress calculation
-    let duration = get_video_duration(input_path, app_handle).await?;
+    logger::append_log_entry(
+        app_handle,
+        window,
+        task_id,
+        "metadata",
+        "Running ffprobe to analyze video duration...",
+    )
+    .await?;
+
+    let duration = get_video_duration(input_path, app_handle, window, task_id).await?;
+
+    logger::append_log_entry(
+        app_handle,
+        window,
+        task_id,
+        "ffprobe",
+        &format!("Video duration: {:.2} seconds", duration),
+    )
+    .await?;
 
     // Get ffmpeg binary path
     let ffmpeg_path = get_binary_path(app_handle, "ffmpeg")?;
+
+    logger::append_log_entry(
+        app_handle,
+        window,
+        task_id,
+        "metadata",
+        "Starting ffmpeg extraction...",
+    )
+    .await?;
 
     // Build ffmpeg command
     let mut cmd = Command::new(ffmpeg_path);
@@ -152,7 +214,7 @@ pub async fn extract_audio_to_wav(
         .arg("-ar")
         .arg("16000") // Sample rate
         .arg("-ac")
-        .arg("1") // Stereo
+        .arg("1") // Mono
         .arg("-y") // Overwrite output file
         .arg(&output_path_str)
         .arg("-progress")
@@ -166,15 +228,27 @@ pub async fn extract_audio_to_wav(
 
     let mut child = cmd.spawn().context("Failed to spawn ffmpeg process")?;
 
-    // Read stderr for progress updates
+    // Read stderr for progress updates and logging
     if let Some(stderr) = child.stderr.take() {
         let reader = BufReader::new(stderr);
         let mut lines = reader.lines();
         let window_clone = window.clone();
+        let app_handle_clone = app_handle.clone();
         let task_id_clone = task_id.to_string();
 
         tokio::spawn(async move {
             while let Ok(Some(line)) = lines.next_line().await {
+                // Log the ffmpeg output
+                let _ = logger::append_log_entry(
+                    &app_handle_clone,
+                    &window_clone,
+                    &task_id_clone,
+                    "ffmpeg",
+                    &line,
+                )
+                .await;
+
+                // Parse progress and emit progress event
                 if let Some(progress) = parse_progress(&line, duration) {
                     let _ = window_clone.emit(
                         "task:progress",
@@ -188,12 +262,45 @@ pub async fn extract_audio_to_wav(
         });
     }
 
+    // Read stdout if needed
+    if let Some(stdout) = child.stdout.take() {
+        let reader = BufReader::new(stdout);
+        let mut lines = reader.lines();
+        let window_clone = window.clone();
+        let app_handle_clone = app_handle.clone();
+        let task_id_clone = task_id.to_string();
+
+        tokio::spawn(async move {
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = logger::append_log_entry(
+                    &app_handle_clone,
+                    &window_clone,
+                    &task_id_clone,
+                    "ffmpeg",
+                    &line,
+                )
+                .await;
+            }
+        });
+    }
+
     // Wait for the process to complete
     let output = child.wait().await.context("Failed to wait for ffmpeg")?;
 
     if !output.success() {
-        anyhow::bail!("FFmpeg process failed with status: {}", output);
+        let error_msg = format!("FFmpeg process failed with status: {}", output);
+        logger::append_log_entry(app_handle, window, task_id, "error", &error_msg).await?;
+        anyhow::bail!(error_msg);
     }
+
+    logger::append_log_entry(
+        app_handle,
+        window,
+        task_id,
+        "metadata",
+        "FFmpeg extraction completed successfully",
+    )
+    .await?;
 
     // Emit completion event
     window
@@ -210,7 +317,12 @@ pub async fn extract_audio_to_wav(
 }
 
 /// Get the duration of a video file in seconds
-async fn get_video_duration(input_path: &str, app_handle: &AppHandle) -> Result<f32> {
+async fn get_video_duration(
+    input_path: &str,
+    app_handle: &AppHandle,
+    window: &Window,
+    task_id: &str,
+) -> Result<f32> {
     // Get ffprobe binary path
     let ffprobe_path = get_binary_path(app_handle, "ffprobe")?;
 
@@ -230,6 +342,15 @@ async fn get_video_duration(input_path: &str, app_handle: &AppHandle) -> Result<
     let output = cmd.output().await.context("Failed to run ffprobe")?;
 
     if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        logger::append_log_entry(
+            app_handle,
+            window,
+            task_id,
+            "error",
+            &format!("ffprobe failed: {}", error),
+        )
+        .await?;
         anyhow::bail!("ffprobe failed to get video duration");
     }
 
@@ -237,6 +358,15 @@ async fn get_video_duration(input_path: &str, app_handle: &AppHandle) -> Result<
         .context("Invalid ffprobe output")?
         .trim()
         .to_string();
+
+    logger::append_log_entry(
+        app_handle,
+        window,
+        task_id,
+        "ffprobe",
+        &format!("Raw duration output: {}", duration_str),
+    )
+    .await?;
 
     duration_str
         .parse::<f32>()

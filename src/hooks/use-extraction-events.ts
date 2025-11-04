@@ -5,6 +5,7 @@ import type {
   ProgressEvent,
   TaskCompleteEvent,
   TaskErrorEvent,
+  TaskLogEvent,
   TaskStartedEvent,
 } from '@/types/extraction'
 import { useExtraction } from '@/context/extraction-context'
@@ -65,6 +66,20 @@ export function useExtractionEvents() {
       dispatch({ type: 'STOP_PROCESSING' })
     })
     unlistenPromises.push(batchCompletePromise)
+
+    // Listen for log events
+    const logPromise = listen<TaskLogEvent>('task:log', (event) => {
+      dispatch({
+        type: 'ADD_LOG_ENTRY',
+        taskId: event.payload.taskId,
+        logEntry: {
+          timestamp: event.payload.timestamp,
+          type: event.payload.type,
+          message: event.payload.message,
+        },
+      })
+    })
+    unlistenPromises.push(logPromise)
 
     // Cleanup function
     return () => {

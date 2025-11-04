@@ -105,6 +105,9 @@ importers:
       babel-plugin-react-compiler:
         specifier: ^1.0.0
         version: 1.0.0
+      eslint:
+        specifier: ^9.39.1
+        version: 9.39.1(jiti@2.6.1)
       jsdom:
         specifier: ^27.1.0
         version: 27.1.0
