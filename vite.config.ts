@@ -9,7 +9,9 @@ const host = process.env.TAURI_DEV_HOST
 
 const config = defineConfig({
   plugins: [
-    nitroV2Plugin(),
+    nitroV2Plugin({
+      compatibilityDate: '2025-11-04',
+    }),
     // this is the plugin that enables path aliases
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
