@@ -2,10 +2,11 @@ export type TaskStatus =
   | 'pending'
   | 'processing'
   | 'transcribing'
+  | 'translating'
   | 'completed'
   | 'failed'
 
-export type LogType = 'metadata' | 'ffprobe' | 'ffmpeg' | 'assemblyai' | 'error'
+export type LogType = 'metadata' | 'ffprobe' | 'ffmpeg' | 'assemblyai' | 'translation' | 'error'
 
 export interface LogEntry {
   timestamp: string
@@ -20,6 +21,7 @@ export interface ExtractionTask {
   status: TaskStatus
   outputPath?: string
   transcriptPath?: string
+  targetLanguage?: string
   error?: string
   startTime?: number
   endTime?: number
@@ -71,6 +73,16 @@ export interface TranscriptionCompleteEvent {
   transcriptPath: string
 }
 
+export interface TranslationStartedEvent {
+  taskId: string
+}
+
+export interface TranslationCompleteEvent {
+  taskId: string
+  /** Path to the final translated SRT file */
+  translatedPath: string
+}
+
 export type ExtractionAction =
   | {
       type: 'ADD_TASKS'
@@ -82,12 +94,18 @@ export type ExtractionAction =
   | { type: 'STOP_PROCESSING' }
   | { type: 'TASK_STARTED'; taskId: string }
   | { type: 'TASK_TRANSCRIBING'; taskId: string }
+  | { type: 'TASK_TRANSLATING'; taskId: string }
   | { type: 'TASK_COMPLETED'; taskId: string; outputPath: string }
   | {
       type: 'TASK_TRANSCRIPTION_COMPLETE'
       taskId: string
       audioPath: string
       transcriptPath: string
+    }
+  | {
+      type: 'TRANSLATION_COMPLETE'
+      taskId: string
+      translatedPath: string
     }
   | { type: 'TASK_FAILED'; taskId: string; error: string }
   | { type: 'REMOVE_TASK'; taskId: string }

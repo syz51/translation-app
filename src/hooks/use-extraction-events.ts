@@ -9,6 +9,8 @@ import type {
   TranscriptionCompleteEvent,
   TranscriptionPollingEvent,
   TranscriptionStartedEvent,
+  TranslationCompleteEvent,
+  TranslationStartedEvent,
 } from '@/types/extraction'
 import { useExtraction } from '@/context/extraction-context'
 
@@ -96,6 +98,23 @@ export function useExtractionEvents() {
             })
           },
         ),
+
+        // Listen for translation started events
+        listen<TranslationStartedEvent>('translation:started', (event) => {
+          dispatch({
+            type: 'TASK_TRANSLATING',
+            taskId: event.payload.taskId,
+          })
+        }),
+
+        // Listen for translation complete events
+        listen<TranslationCompleteEvent>('translation:complete', (event) => {
+          dispatch({
+            type: 'TRANSLATION_COMPLETE',
+            taskId: event.payload.taskId,
+            translatedPath: event.payload.translatedPath,
+          })
+        }),
       ])
 
       // If component unmounted during setup, cleanup immediately

@@ -76,6 +76,16 @@ function extractionReducer(
         ),
       }
 
+    case 'TASK_TRANSLATING':
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId
+            ? { ...task, status: 'translating' as const }
+            : task,
+        ),
+      }
+
     case 'TASK_COMPLETED':
       return {
         ...state,
@@ -101,6 +111,21 @@ function extractionReducer(
                 status: 'completed' as const,
                 outputPath: action.transcriptPath, // Use transcript path as the main output (audio is temp and gets cleaned up)
                 transcriptPath: action.transcriptPath,
+                endTime: Date.now(),
+              }
+            : task,
+        ),
+      }
+
+    case 'TRANSLATION_COMPLETE':
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId
+            ? {
+                ...task,
+                status: 'completed' as const,
+                outputPath: action.translatedPath, // Use translated path as the final output
                 endTime: Date.now(),
               }
             : task,
