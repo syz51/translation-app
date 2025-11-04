@@ -15,7 +15,10 @@ export const env = createEnv({
   client: {
     VITE_APP_TITLE: z.string().min(1).optional(),
     VITE_ASSEMBLYAI_API_KEY: z.string().min(1),
-    VITE_TRANSLATION_SERVER_URL: z.string().url().default('http://localhost:8000'),
+    VITE_TRANSLATION_SERVER_URL: z
+      .string()
+      .url()
+      .default('http://localhost:8000'),
   },
 
   /**

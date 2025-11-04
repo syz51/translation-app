@@ -24,7 +24,11 @@ export function TaskItem({ task }: TaskItemProps) {
 
   // Update time every second for in-progress tasks
   useEffect(() => {
-    if (task.status === 'processing' || task.status === 'transcribing') {
+    if (
+      task.status === 'processing' ||
+      task.status === 'transcribing' ||
+      task.status === 'translating'
+    ) {
       const interval = setInterval(() => {
         setNow(Date.now())
       }, 1000)
@@ -43,6 +47,8 @@ export function TaskItem({ task }: TaskItemProps) {
         return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
       case 'transcribing':
         return 'bg-purple-500/10 text-purple-500 border-purple-500/20'
+      case 'translating':
+        return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
       default:
         return 'bg-gray-500/10 text-gray-500 border-gray-500/20'
     }
@@ -57,6 +63,8 @@ export function TaskItem({ task }: TaskItemProps) {
       case 'processing':
         return <Loader2 className="h-4 w-4 animate-spin" />
       case 'transcribing':
+        return <Loader2 className="h-4 w-4 animate-spin" />
+      case 'translating':
         return <Loader2 className="h-4 w-4 animate-spin" />
       default:
         return <FileVideo className="h-4 w-4" />
@@ -73,6 +81,8 @@ export function TaskItem({ task }: TaskItemProps) {
         return 'Extracting Audio'
       case 'transcribing':
         return 'Transcribing'
+      case 'translating':
+        return 'Translating'
       default:
         return 'Pending'
     }
@@ -86,7 +96,11 @@ export function TaskItem({ task }: TaskItemProps) {
   }
 
   const handleRemove = () => {
-    if (task.status !== 'processing' && task.status !== 'transcribing') {
+    if (
+      task.status !== 'processing' &&
+      task.status !== 'transcribing' &&
+      task.status !== 'translating'
+    ) {
       dispatch({ type: 'REMOVE_TASK', taskId: task.id })
     }
   }
@@ -149,7 +163,9 @@ export function TaskItem({ task }: TaskItemProps) {
             size="icon"
             onClick={handleRemove}
             disabled={
-              task.status === 'processing' || task.status === 'transcribing'
+              task.status === 'processing' ||
+              task.status === 'transcribing' ||
+              task.status === 'translating'
             }
             className="opacity-0 transition-opacity group-hover:opacity-100"
             title="Remove Task"

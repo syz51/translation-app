@@ -53,27 +53,35 @@ export function useExtractionCommands() {
   }
 
   /**
-   * Starts the extraction and transcription pipeline.
+   * Starts the extraction, transcription, and translation pipeline.
    * This will:
    * 1. Extract audio from video files to WAV format
    * 2. Upload audio to AssemblyAI for transcription
-   * 3. Generate SRT subtitle files
+   * 3. Translate SRT to target language
+   * 4. Generate final SRT subtitle files
    */
   const startExtraction = async (
     tasks: Array<ExtractionTask>,
     outputFolder: string,
+    targetLanguage: string = 'zh',
   ): Promise<void> => {
     try {
       await invoke('extract_audio_batch', {
         tasks: tasks.map((task) => ({
           id: task.id,
           filePath: task.filePath,
+          targetLanguage,
         })),
         outputFolder,
         apiKey: env.VITE_ASSEMBLYAI_API_KEY,
+        targetLanguage,
+        translationServerUrl: env.VITE_TRANSLATION_SERVER_URL,
       })
     } catch (error) {
-      console.error('Failed to start extraction and transcription:', error)
+      console.error(
+        'Failed to start extraction, transcription, and translation:',
+        error,
+      )
       throw error
     }
   }

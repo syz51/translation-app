@@ -58,6 +58,8 @@ export function LogViewer({ logs }: LogViewerProps) {
         return 'text-green-400'
       case 'assemblyai':
         return 'text-orange-400'
+      case 'translation':
+        return 'text-yellow-400'
       case 'error':
         return 'text-red-400'
       default:
@@ -75,6 +77,8 @@ export function LogViewer({ logs }: LogViewerProps) {
         return 'FFMPEG'
       case 'assemblyai':
         return 'ASSEMBLYAI'
+      case 'translation':
+        return 'TRANSLATION'
       case 'error':
         return 'ERROR'
       default:

@@ -1,12 +1,28 @@
-import { CheckCircle2, Clock, Loader2, Play, XCircle } from 'lucide-react'
+import {
+  CheckCircle2,
+  Clock,
+  Languages,
+  Loader2,
+  Play,
+  XCircle,
+} from 'lucide-react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useExtraction } from '@/context/extraction-context'
 import { useExtractionCommands } from '@/hooks/use-extraction-commands'
 
 export function ProgressSummary() {
   const { state, dispatch } = useExtraction()
   const { startExtraction } = useExtractionCommands()
+  const [targetLanguage, setTargetLanguage] = useState<string>('zh')
 
   const totalTasks = state.tasks.length
   const completedTasks = state.tasks.filter(
@@ -18,6 +34,9 @@ export function ProgressSummary() {
   ).length
   const transcribingTasks = state.tasks.filter(
     (t) => t.status === 'transcribing',
+  ).length
+  const translatingTasks = state.tasks.filter(
+    (t) => t.status === 'translating',
   ).length
   const pendingTasks = state.tasks.filter((t) => t.status === 'pending').length
 
@@ -32,7 +51,7 @@ export function ProgressSummary() {
 
     dispatch({ type: 'START_PROCESSING' })
     try {
-      await startExtraction(state.tasks, state.outputFolder)
+      await startExtraction(state.tasks, state.outputFolder, targetLanguage)
     } catch (error) {
       console.error('Error starting extraction:', error)
       dispatch({ type: 'STOP_PROCESSING' })
@@ -64,7 +83,24 @@ export function ProgressSummary() {
           )}
         </div>
 
-        <div className="grid grid-cols-5 gap-3">
+        <div className="flex items-center gap-3">
+          <Languages className="h-4 w-4 text-muted-foreground" />
+          <Select
+            value={targetLanguage}
+            onValueChange={setTargetLanguage}
+            disabled={state.isProcessing}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Select target language" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="zh">Chinese (中文)</SelectItem>
+              <SelectItem value="en">English</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-6 gap-3">
           <div className="flex items-center gap-2">
             <div className="rounded-full bg-gray-500/10 p-2">
               <Clock className="h-4 w-4 text-gray-500" />
@@ -92,6 +128,16 @@ export function ProgressSummary() {
             <div>
               <p className="text-2xl font-bold">{transcribingTasks}</p>
               <p className="text-xs text-muted-foreground">Transcribing</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="rounded-full bg-yellow-500/10 p-2">
+              <Languages className="h-4 w-4 text-yellow-500" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{translatingTasks}</p>
+              <p className="text-xs text-muted-foreground">Translating</p>
             </div>
           </div>
 
@@ -130,7 +176,7 @@ export function ProgressSummary() {
         >
           {state.isProcessing
             ? 'Processing...'
-            : 'Start Extraction & Transcription'}
+            : 'Start Extraction, Transcription & Translation'}
         </Button>
       </div>
     </Card>
