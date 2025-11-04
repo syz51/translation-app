@@ -189,6 +189,74 @@ async fn extract_audio_batch(
 }
 
 #[tauri::command]
+async fn translate_srt_batch(
+    tasks: Vec<TaskInfo>,
+    output_folder: String,
+    target_language: String,
+    translation_server_url: String,
+    window: Window,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    // Process up to 4 tasks in parallel
+    let mut handles = Vec::new();
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(4));
+
+    for task in tasks {
+        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let window_clone = window.clone();
+        let output_folder_clone = output_folder.clone();
+        let app_handle_clone = app_handle.clone();
+        let target_language_clone = target_language.clone();
+        let translation_server_url_clone = translation_server_url.clone();
+
+        let handle = tokio::spawn(async move {
+            // Directly translate SRT (no audio extraction, no transcription)
+            let translation_result = translation::translate_srt(
+                &translation_server_url_clone,
+                &task.id,
+                &task.file_path, // SRT file path (not video)
+                &target_language_clone,
+                &output_folder_clone,
+                &task.file_path, // Use same path for filename extraction
+                &window_clone,
+                &app_handle_clone,
+            )
+            .await;
+
+            match translation_result {
+                Ok(_final_srt_path) => {
+                    // Success - translation complete event already emitted by translate_srt
+                }
+                Err(e) => {
+                    let _ = window_clone.emit(
+                        "task:failed",
+                        TaskErrorPayload {
+                            task_id: task.id.clone(),
+                            error: format!("Translation failed: {}", e),
+                        },
+                    );
+                }
+            }
+
+            // Release the permit
+            drop(permit);
+        });
+
+        handles.push(handle);
+    }
+
+    // Wait for all tasks to complete
+    for handle in handles {
+        let _ = handle.await;
+    }
+
+    // Emit batch complete event
+    let _ = window.emit("batch:complete", BatchCompletePayload {});
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn cancel_extraction(task_id: String, window: Window) -> Result<(), String> {
     // Note: Full cancellation implementation requires architectural changes:
     // - Global state to track running FFmpeg processes and AssemblyAI operations
@@ -241,6 +309,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             extract_audio_batch,
+            translate_srt_batch,
             cancel_extraction,
             get_task_logs,
             get_log_folder

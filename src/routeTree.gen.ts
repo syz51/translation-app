@@ -9,9 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VideoRouteImport } from './routes/video'
+import { Route as SrtRouteImport } from './routes/srt'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TaskTaskIdRouteImport } from './routes/task.$taskId'
 
+const VideoRoute = VideoRouteImport.update({
+  id: '/video',
+  path: '/video',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SrtRoute = SrtRouteImport.update({
+  id: '/srt',
+  path: '/srt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -25,32 +37,54 @@ const TaskTaskIdRoute = TaskTaskIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/srt': typeof SrtRoute
+  '/video': typeof VideoRoute
   '/task/$taskId': typeof TaskTaskIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/srt': typeof SrtRoute
+  '/video': typeof VideoRoute
   '/task/$taskId': typeof TaskTaskIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/srt': typeof SrtRoute
+  '/video': typeof VideoRoute
   '/task/$taskId': typeof TaskTaskIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/task/$taskId'
+  fullPaths: '/' | '/srt' | '/video' | '/task/$taskId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/task/$taskId'
-  id: '__root__' | '/' | '/task/$taskId'
+  to: '/' | '/srt' | '/video' | '/task/$taskId'
+  id: '__root__' | '/' | '/srt' | '/video' | '/task/$taskId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SrtRoute: typeof SrtRoute
+  VideoRoute: typeof VideoRoute
   TaskTaskIdRoute: typeof TaskTaskIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/video': {
+      id: '/video'
+      path: '/video'
+      fullPath: '/video'
+      preLoaderRoute: typeof VideoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/srt': {
+      id: '/srt'
+      path: '/srt'
+      fullPath: '/srt'
+      preLoaderRoute: typeof SrtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -70,6 +104,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SrtRoute: SrtRoute,
+  VideoRoute: VideoRoute,
   TaskTaskIdRoute: TaskTaskIdRoute,
 }
 export const routeTree = rootRouteImport

@@ -12,6 +12,7 @@ const initialState: ExtractionState = {
   outputFolder: null,
   lastOutputPath: null,
   isProcessing: false,
+  targetLanguage: null,
 }
 
 function extractionReducer(
@@ -42,6 +43,12 @@ function extractionReducer(
       return {
         ...state,
         lastOutputPath: action.path,
+      }
+
+    case 'SET_TARGET_LANGUAGE':
+      return {
+        ...state,
+        targetLanguage: action.language,
       }
 
     case 'START_PROCESSING':

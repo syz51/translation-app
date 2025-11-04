@@ -7,6 +7,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useRouter } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -18,11 +19,19 @@ import {
 } from '@/components/ui/select'
 import { useExtraction } from '@/context/extraction-context'
 import { useExtractionCommands } from '@/hooks/use-extraction-commands'
+import { useSrtTranslationCommands } from '@/hooks/use-srt-translation-commands'
 
 export function ProgressSummary() {
   const { state, dispatch } = useExtraction()
   const { startExtraction } = useExtractionCommands()
+  const { startTranslation } = useSrtTranslationCommands()
+  const router = useRouter()
   const [targetLanguage, setTargetLanguage] = useState<string>('zh')
+
+  // Detect current route
+  const currentPath = router.state.location.pathname
+  const isSrtFlow = currentPath === '/srt'
+  const isVideoFlow = currentPath === '/video'
 
   const totalTasks = state.tasks.length
   const completedTasks = state.tasks.filter(
@@ -40,20 +49,32 @@ export function ProgressSummary() {
   ).length
   const pendingTasks = state.tasks.filter((t) => t.status === 'pending').length
 
+  // For SRT flow, also require target language
   const canStart =
     totalTasks > 0 &&
     state.outputFolder &&
     !state.isProcessing &&
-    pendingTasks > 0
+    pendingTasks > 0 &&
+    (isSrtFlow ? !!state.targetLanguage : true)
 
   const handleStart = async () => {
     if (!canStart || !state.outputFolder) return
 
     dispatch({ type: 'START_PROCESSING' })
     try {
-      await startExtraction(state.tasks, state.outputFolder, targetLanguage)
+      if (isSrtFlow && state.targetLanguage) {
+        // SRT translation flow
+        await startTranslation(
+          state.tasks.map((t) => ({ taskId: t.id, filePath: t.filePath })),
+          state.outputFolder,
+          state.targetLanguage,
+        )
+      } else if (isVideoFlow) {
+        // Video transcription flow
+        await startExtraction(state.tasks, state.outputFolder, targetLanguage)
+      }
     } catch (error) {
-      console.error('Error starting extraction:', error)
+      console.error('Error starting process:', error)
       dispatch({ type: 'STOP_PROCESSING' })
     }
   }
@@ -83,22 +104,24 @@ export function ProgressSummary() {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <Languages className="h-4 w-4 text-muted-foreground" />
-          <Select
-            value={targetLanguage}
-            onValueChange={setTargetLanguage}
-            disabled={state.isProcessing}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select target language" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="zh">Chinese (中文)</SelectItem>
-              <SelectItem value="en">English</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {isVideoFlow && (
+          <div className="flex items-center gap-3">
+            <Languages className="h-4 w-4 text-muted-foreground" />
+            <Select
+              value={targetLanguage}
+              onValueChange={setTargetLanguage}
+              disabled={state.isProcessing}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select target language" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zh">Chinese (中文)</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="grid grid-cols-6 gap-3">
           <div className="flex items-center gap-2">
@@ -168,6 +191,12 @@ export function ProgressSummary() {
           </p>
         )}
 
+        {isSrtFlow && !state.targetLanguage && totalTasks > 0 && (
+          <p className="text-sm text-amber-600">
+            Please select a target language to start translation
+          </p>
+        )}
+
         <Button
           onClick={handleStart}
           disabled={!canStart}
@@ -176,7 +205,9 @@ export function ProgressSummary() {
         >
           {state.isProcessing
             ? 'Processing...'
-            : 'Start Extraction, Transcription & Translation'}
+            : isSrtFlow
+              ? 'Start Translation'
+              : 'Start Extraction, Transcription & Translation'}
         </Button>
       </div>
     </Card>

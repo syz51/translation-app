@@ -110,8 +110,8 @@ pub async fn translate_srt(
         .to_str()
         .context("Invalid file name")?;
 
-    // Create final output path for translated SRT
-    let final_srt_path = Path::new(output_folder).join(format!("{}.srt", file_stem));
+    // Create final output path for translated SRT with language suffix
+    let final_srt_path = Path::new(output_folder).join(format!("{}_{}.srt", file_stem, target_language));
     let final_srt_path_str = final_srt_path
         .to_str()
         .context("Invalid final SRT output path")?

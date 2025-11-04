@@ -124,6 +124,11 @@ export function TaskItem({ task }: TaskItemProps) {
                   <span className="mr-1">{getStatusIcon()}</span>
                   {getStatusText()}
                 </Badge>
+                {task.targetLanguage && (
+                  <Badge variant="outline">
+                    Target: {task.targetLanguage.toUpperCase()}
+                  </Badge>
+                )}
                 {getDuration() && (
                   <span className="text-xs text-muted-foreground">
                     {getDuration()}

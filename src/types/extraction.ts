@@ -39,6 +39,7 @@ export interface ExtractionState {
   outputFolder: string | null
   lastOutputPath: string | null
   isProcessing: boolean
+  targetLanguage: string | null
 }
 
 export interface TaskCompleteEvent {
@@ -96,6 +97,7 @@ export type ExtractionAction =
     }
   | { type: 'SET_OUTPUT_FOLDER'; folder: string }
   | { type: 'SET_LAST_OUTPUT_PATH'; path: string | null }
+  | { type: 'SET_TARGET_LANGUAGE'; language: string }
   | { type: 'START_PROCESSING' }
   | { type: 'STOP_PROCESSING' }
   | { type: 'TASK_STARTED'; taskId: string }
