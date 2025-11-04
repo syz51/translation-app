@@ -8,6 +8,19 @@
     "opener:default",
     "dialog:default",
     "dialog:allow-open",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    "fs:default",
+    "fs:allow-exists",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-read-dir",
+    "fs:allow-create",
+    "fs:allow-mkdir",
+    "fs:scope-appdata",
+    "fs:scope-appdata-recursive",
+    "store:default",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save"
   ]
 }
