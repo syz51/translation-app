@@ -4,21 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a translation app built with TanStack Start (React) for the frontend and Tauri v2 for the desktop application wrapper. The project uses TypeScript, Tailwind CSS v4, and Vite as the build tool.
+This is a translation app built with TanStack Router (React SPA) for the frontend and Tauri v2 for the desktop application wrapper. The project uses TypeScript, Tailwind CSS v4, and Vite as the build tool.
 
 ## Architecture
 
-**Hybrid Desktop Application:**
+**Desktop SPA Application:**
 
-- Frontend: TanStack Start (full-stack React framework) with file-based routing
+- Frontend: TanStack Router (React SPA) with file-based routing
 - Desktop Wrapper: Tauri v2 (Rust-based) for native desktop capabilities
 - The Vite dev server runs on port 1420 (configured in `tauri.conf.json` and `vite.config.ts`)
-- Frontend builds output to `.output/` directory (consumed by Tauri)
+- Frontend builds output to `dist/` directory (consumed by Tauri)
 
 **Key Stack Components:**
 
-- TanStack Router: File-based routing in `src/routes/` directory
-- TanStack Nitro v2: Server-side rendering support
+- TanStack Router: File-based routing in `src/routes/` directory with auto code-splitting
 - React 19 with React Compiler (babel-plugin-react-compiler)
 - Tailwind CSS v4 with Vite plugin
 - T3 Env: Type-safe environment variables (see `src/env.ts`)
@@ -26,8 +25,10 @@ This is a translation app built with TanStack Start (React) for the frontend and
 
 **Project Structure:**
 
+- `index.html`: HTML entry point
+- `src/main.tsx`: React application entry point
 - `src/routes/`: File-based routing (auto-generates `src/routeTree.gen.ts`)
-- `src/routes/__root.tsx`: Root layout with devtools and shell component
+- `src/routes/__root.tsx`: Root layout with router outlet and devtools
 - `src/router.tsx`: Router configuration
 - `src/env.ts`: Environment variable schema with Zod validation
 - `src/lib/utils.ts`: Shared utility functions
@@ -39,7 +40,7 @@ This is a translation app built with TanStack Start (React) for the frontend and
 **Tauri Integration:**
 
 - Dev mode: Tauri runs `pnpm dev` (starts Vite) and connects to localhost:1420
-- Build mode: Tauri runs `pnpm build` then packages the `.output/` directory
+- Build mode: Tauri runs `pnpm build` then packages the `dist/` directory
 - The app uses `@tauri-apps/api` and `@tauri-apps/plugin-opener` for native functionality
 
 ## Development Commands
@@ -107,8 +108,7 @@ pnpx shadcn@latest add <component-name>
 
 **Environment Variables:**
 
-- Client vars must be prefixed with `VITE_`
-- Server vars have no prefix requirement
+- All client-side vars must be prefixed with `VITE_`
 - All env vars are validated via Zod schemas in `src/env.ts`
 - Import with: `import { env } from '@/env'`
 

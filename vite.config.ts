@@ -1,29 +1,32 @@
 import { defineConfig } from 'vite'
-import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import viteTsConfigPaths from 'vite-tsconfig-paths'
 import tailwindcss from '@tailwindcss/vite'
-import { nitroV2Plugin } from '@tanstack/nitro-v2-vite-plugin'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 
 const host = process.env.TAURI_DEV_HOST
 
 const config = defineConfig({
   plugins: [
-    nitroV2Plugin({
-      compatibilityDate: '2025-11-04',
+    tanstackRouter({
+      target: 'react',
+      autoCodeSplitting: true,
     }),
     // this is the plugin that enables path aliases
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
     }),
     tailwindcss(),
-    tanstackStart(),
     viteReact({
       babel: {
         plugins: ['babel-plugin-react-compiler'],
       },
     }),
   ],
+
+  build: {
+    outDir: 'dist',
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

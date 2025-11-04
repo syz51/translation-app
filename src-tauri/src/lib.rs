@@ -18,6 +18,7 @@ async fn extract_audio_batch(
     tasks: Vec<TaskInfo>,
     output_folder: String,
     window: Window,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     // Process up to 4 tasks in parallel
     let mut handles = Vec::new();
@@ -27,6 +28,7 @@ async fn extract_audio_batch(
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let window_clone = window.clone();
         let output_folder_clone = output_folder.clone();
+        let app_handle_clone = app_handle.clone();
 
         let handle = tokio::spawn(async move {
             let result = extract_audio_to_wav(
@@ -34,6 +36,7 @@ async fn extract_audio_batch(
                 &task.file_path,
                 &output_folder_clone,
                 &window_clone,
+                &app_handle_clone,
             )
             .await;
 

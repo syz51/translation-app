@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tauri::{Emitter, Window};
+use tauri::{AppHandle, Emitter, Window};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
@@ -41,12 +41,44 @@ pub struct TaskErrorPayload {
     pub error: String,
 }
 
+/// Get the path to a bundled binary, falling back to system PATH in dev mode
+fn get_binary_path(app_handle: &AppHandle, binary_name: &str) -> Result<PathBuf> {
+    use tauri::Manager;
+
+    // Check if we're in development mode by attempting to resolve the resource path
+    // In dev mode, this will typically fail or point to a non-existent location
+    let is_dev_mode = cfg!(debug_assertions);
+
+    if is_dev_mode {
+        // In development, use the system PATH
+        return Ok(PathBuf::from(binary_name));
+    }
+
+    // In production, use the bundled binary
+    // For externalBin on macOS, binaries are placed in Contents/MacOS/
+    // Resources is at Contents/Resources, so we go up to Contents, then into MacOS
+    let sidecar_path = app_handle
+        .path()
+        .resolve(binary_name, tauri::path::BaseDirectory::Resource)
+        .context("Failed to resolve sidecar path")?;
+
+    if !sidecar_path.exists() {
+        anyhow::bail!(
+            "Bundled binary not found: {}. Please ensure ffmpeg binaries are bundled with the application.",
+            sidecar_path.display()
+        );
+    }
+
+    Ok(sidecar_path)
+}
+
 /// Extract audio from a video file to WAV format
 pub async fn extract_audio_to_wav(
     task_id: &str,
     input_path: &str,
     output_folder: &str,
     window: &Window,
+    app_handle: &AppHandle,
 ) -> Result<String> {
     // Emit task started event
     window
@@ -74,10 +106,13 @@ pub async fn extract_audio_to_wav(
         .to_string();
 
     // Get video duration first for progress calculation
-    let duration = get_video_duration(input_path).await?;
+    let duration = get_video_duration(input_path, app_handle).await?;
+
+    // Get ffmpeg binary path
+    let ffmpeg_path = get_binary_path(app_handle, "ffmpeg")?;
 
     // Build ffmpeg command
-    let mut child = Command::new("ffmpeg")
+    let mut child = Command::new(ffmpeg_path)
         .arg("-i")
         .arg(input_path)
         .arg("-vn") // No video
@@ -140,8 +175,11 @@ pub async fn extract_audio_to_wav(
 }
 
 /// Get the duration of a video file in seconds
-async fn get_video_duration(input_path: &str) -> Result<f32> {
-    let output = Command::new("ffprobe")
+async fn get_video_duration(input_path: &str, app_handle: &AppHandle) -> Result<f32> {
+    // Get ffprobe binary path
+    let ffprobe_path = get_binary_path(app_handle, "ffprobe")?;
+
+    let output = Command::new(ffprobe_path)
         .arg("-v")
         .arg("error")
         .arg("-show_entries")
