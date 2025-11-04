@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useExtraction } from '@/context/extraction-context'
 import { useExtractionCommands } from '@/hooks/use-extraction-commands'
+import { getDirectoryFromPath } from '@/lib/utils'
 
 export function FileSelector() {
-  const { dispatch } = useExtraction()
+  const { state, dispatch } = useExtraction()
   const { selectVideoFiles } = useExtractionCommands()
   const [isDragging, setIsDragging] = useState(false)
 
@@ -20,8 +21,18 @@ export function FileSelector() {
       }))
 
       dispatch({ type: 'ADD_TASKS', tasks })
+
+      // Auto-populate output folder on first use
+      // Only if no output folder is set and no last output path exists
+      if (!state.outputFolder && !state.lastOutputPath && files.length > 0) {
+        const firstFilePath = files[0]
+        const inputDirectory = getDirectoryFromPath(firstFilePath)
+        if (inputDirectory) {
+          dispatch({ type: 'SET_OUTPUT_FOLDER', folder: inputDirectory })
+        }
+      }
     },
-    [dispatch],
+    [dispatch, state.outputFolder, state.lastOutputPath],
   )
 
   const handleSelectFiles = async () => {

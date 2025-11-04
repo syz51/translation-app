@@ -1,14 +1,16 @@
-import { createContext, useContext, useReducer } from 'react'
+import { createContext, useContext, useEffect, useReducer } from 'react'
 import type { ReactNode } from 'react'
 import type {
   ExtractionAction,
   ExtractionState,
   ExtractionTask,
 } from '@/types/extraction'
+import { useSettingsStore } from '@/hooks/use-settings-store'
 
 const initialState: ExtractionState = {
   tasks: [],
   outputFolder: null,
+  lastOutputPath: null,
   isProcessing: false,
 }
 
@@ -35,6 +37,12 @@ function extractionReducer(
       return {
         ...state,
         outputFolder: action.folder,
+      }
+
+    case 'SET_LAST_OUTPUT_PATH':
+      return {
+        ...state,
+        lastOutputPath: action.path,
       }
 
     case 'START_PROCESSING':
@@ -141,6 +149,22 @@ const ExtractionContext = createContext<ExtractionContextValue | undefined>(
 
 export function ExtractionProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(extractionReducer, initialState)
+  const { getLastOutputPath, isReady } = useSettingsStore()
+
+  // Load last output path from store on mount
+  useEffect(() => {
+    if (isReady) {
+      getLastOutputPath().then((path) => {
+        if (path) {
+          dispatch({ type: 'SET_LAST_OUTPUT_PATH', path })
+          // Set as default output folder if no folder is currently set
+          if (!state.outputFolder) {
+            dispatch({ type: 'SET_OUTPUT_FOLDER', folder: path })
+          }
+        }
+      })
+    }
+  }, [isReady, getLastOutputPath])
 
   return (
     <ExtractionContext.Provider value={{ state, dispatch }}>

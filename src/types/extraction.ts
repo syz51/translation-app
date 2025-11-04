@@ -24,6 +24,7 @@ export interface ExtractionTask {
 export interface ExtractionState {
   tasks: Array<ExtractionTask>
   outputFolder: string | null
+  lastOutputPath: string | null
   isProcessing: boolean
 }
 
@@ -59,6 +60,7 @@ export type ExtractionAction =
       tasks: Array<Omit<ExtractionTask, 'id' | 'status' | 'progress' | 'logs'>>
     }
   | { type: 'SET_OUTPUT_FOLDER'; folder: string }
+  | { type: 'SET_LAST_OUTPUT_PATH'; path: string | null }
   | { type: 'START_PROCESSING' }
   | { type: 'STOP_PROCESSING' }
   | { type: 'UPDATE_TASK_PROGRESS'; taskId: string; progress: number }

@@ -4,16 +4,21 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useExtraction } from '@/context/extraction-context'
 import { useExtractionCommands } from '@/hooks/use-extraction-commands'
+import { useSettingsStore } from '@/hooks/use-settings-store'
 
 export function OutputFolderSelector() {
   const { state, dispatch } = useExtraction()
   const { selectOutputFolder } = useExtractionCommands()
+  const { setLastOutputPath } = useSettingsStore()
 
   const handleSelectFolder = async () => {
     try {
       const folder = await selectOutputFolder()
       if (folder) {
         dispatch({ type: 'SET_OUTPUT_FOLDER', folder })
+        // Persist the selection for future sessions
+        dispatch({ type: 'SET_LAST_OUTPUT_PATH', path: folder })
+        await setLastOutputPath(folder)
       }
     } catch (error) {
       console.error('Error selecting folder:', error)
