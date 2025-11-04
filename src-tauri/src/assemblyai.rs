@@ -18,6 +18,7 @@ struct UploadResponse {
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateTranscriptRequest {
     audio_url: String,
+    language_detection: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -254,6 +255,7 @@ async fn create_transcript(
                 let client = reqwest::Client::new();
                 let request_body = CreateTranscriptRequest {
                     audio_url: audio_url.clone(),
+                    language_detection: true,
                 };
 
                 let response = client
