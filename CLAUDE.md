@@ -112,12 +112,6 @@ vitest
 **Code Quality:**
 
 ```bash
-# Run ESLint
-pnpm lint
-
-# Run Prettier
-pnpm format
-
 # Run both Prettier and ESLint with auto-fix
 pnpm check
 ```
