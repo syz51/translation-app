@@ -26,7 +26,8 @@ export function ProgressSummary() {
   const { startExtraction } = useExtractionCommands()
   const { startTranslation } = useSrtTranslationCommands()
   const router = useRouter()
-  const [targetLanguage, setTargetLanguage] = useState<string>('zh')
+  const [targetLanguage, setTargetLanguage] =
+    useState<string>('Chinese Simplified')
 
   // Detect current route
   const currentPath = router.state.location.pathname
@@ -134,8 +135,10 @@ export function ProgressSummary() {
                 <SelectValue placeholder="Select target language" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="zh">Chinese (中文)</SelectItem>
-                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="Chinese Simplified">
+                  Chinese Simplified (简体中文)
+                </SelectItem>
+                <SelectItem value="English">English</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -9,8 +9,8 @@ import { Card } from '@/components/ui/card'
 import { useExtraction } from '@/context/extraction-context'
 
 const LANGUAGES = [
-  { code: 'en', label: 'English' },
-  { code: 'zh', label: 'Chinese' },
+  { code: 'English', label: 'English' },
+  { code: 'Chinese Simplified', label: 'Chinese Simplified' },
 ] as const
 
 export function LanguageSelector() {

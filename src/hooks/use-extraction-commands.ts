@@ -63,7 +63,7 @@ export function useExtractionCommands() {
   const startExtraction = async (
     tasks: Array<ExtractionTask>,
     outputFolder: string,
-    targetLanguage: string = 'zh',
+    targetLanguage: string = 'Chinese Simplified',
   ): Promise<void> => {
     try {
       await invoke('extract_audio_batch', {

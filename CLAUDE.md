@@ -435,13 +435,13 @@ Backend spawns task (up to 4 parallel)
   → Rust: extract_audio_to_wav()
     → emit('task:started', { taskId })
     → emit('task:log', { type: 'ffmpeg', message })
-  
+
   → Rust: transcribe_audio()
     → emit('transcription:started', { taskId })
     → emit('task:log', { type: 'assemblyai', message })
     → emit('transcription:polling', { taskId, status })
     → emit('transcription:complete', { taskId, audioPath, transcriptPath })
-  
+
   → Rust: translate_srt()
     → emit('translation:started', { taskId, originalSrtPath })
     → emit('task:log', { type: 'translation', message })

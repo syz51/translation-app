@@ -111,7 +111,10 @@ pub async fn translate_srt(
         .context("Invalid file name")?;
 
     // Create final output path for translated SRT with language suffix
-    let final_srt_path = Path::new(output_folder).join(format!("{}_{}.srt", file_stem, target_language));
+    // Sanitize language name for filename (replace spaces with underscores)
+    let sanitized_language = target_language.replace(" ", "_");
+    let final_srt_path =
+        Path::new(output_folder).join(format!("{}_{}.srt", file_stem, sanitized_language));
     let final_srt_path_str = final_srt_path
         .to_str()
         .context("Invalid final SRT output path")?
@@ -259,4 +262,3 @@ pub async fn translate_srt(
 
     Ok(final_srt_path_str)
 }
-
