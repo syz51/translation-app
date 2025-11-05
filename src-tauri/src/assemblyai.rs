@@ -19,6 +19,13 @@ struct UploadResponse {
 struct CreateTranscriptRequest {
     audio_url: String,
     language_detection: bool,
+    // Use the best speech model for highest accuracy (priority order)
+    speech_models: Vec<String>,
+    // Enable speaker labels to distinguish different speakers
+    speaker_labels: bool,
+    // Enable punctuation and formatting for better readability
+    punctuate: bool,
+    format_text: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -256,6 +263,10 @@ async fn create_transcript(
                 let request_body = CreateTranscriptRequest {
                     audio_url: audio_url.clone(),
                     language_detection: true,
+                    speech_models: vec!["best".to_string()],
+                    speaker_labels: true,
+                    punctuate: true,
+                    format_text: true,
                 };
 
                 let response = client
