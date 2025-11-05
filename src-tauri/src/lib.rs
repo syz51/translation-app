@@ -68,6 +68,7 @@ async fn extract_audio_batch(
                                 &target_language_clone,
                                 &output_folder_clone,
                                 &task.file_path,
+                                false, // Video workflow: no language suffix
                                 &window_clone,
                                 &app_handle_clone,
                             )
@@ -225,6 +226,7 @@ async fn translate_srt_batch(
                 &target_language_clone,
                 &output_folder_clone,
                 &task.file_path, // Use same path for filename extraction
+                true,            // SRT workflow: include language suffix
                 &window_clone,
                 &app_handle_clone,
             )
