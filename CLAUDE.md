@@ -134,7 +134,7 @@ pnpx shadcn@latest add <component-name>
 - All client-side vars must be prefixed with `VITE_`
 - All env vars are validated via Zod schemas in `src/env.ts`
 - Import with: `import { env } from '@/env'`
-- Required: `VITE_ASSEMBLYAI_API_KEY` (AssemblyAI API key)
+- Required: `VITE_TRANSCRIPTION_SERVER_URL` (Your secure backend, default: `http://localhost:3000/api`)
 - Required: `VITE_TRANSLATION_SERVER_URL` (default: `http://localhost:8000`)
 
 **TanStack Router:**
@@ -176,19 +176,21 @@ Complete pipeline: Video → Audio → Transcript → Translation → Final SRT
    - Saves to temp directory: `{system_temp}/translation-app-audio/`
    - Emits `task:started` event
 
-3. **Upload WAV to AssemblyAI**
-   - Uploads to EU endpoint (GDPR compliant)
-   - Receives upload URL for transcription
+3. **Upload WAV to Transcription Backend (Secure Proxy)**
+   - Uploads to YOUR backend (not directly to AssemblyAI)
+   - Backend holds AssemblyAI API key securely
+   - Receives job ID for polling
    - Emits `transcription:started` event
 
-4. **Poll for transcription completion**
-   - Polls every 3 seconds
+4. **Poll backend for transcription completion**
+   - Polls YOUR backend every 3 seconds
+   - Backend polls AssemblyAI internally
    - Max 30 minutes timeout (600 attempts)
    - Automatic retry with exponential backoff on network errors (3 attempts, 1s → 2s → 4s)
    - Emits `transcription:polling` events with status updates
 
-5. **Download original SRT to temp folder**
-   - Downloads completed transcript
+5. **Download original SRT from backend to temp folder**
+   - Downloads completed transcript from YOUR backend
    - Saves to temp directory with `-original.srt` suffix
    - Emits `transcription:complete` event
    - This SRT is intermediate, not the final output
@@ -240,7 +242,7 @@ Simplified pipeline: Existing SRT → Translation → Translated SRT
 **Backend (Rust):**
 
 - `src-tauri/src/lib.rs` - Main pipeline orchestration
-  - `extract_audio_batch()` - Video workflow command (FFmpeg → AssemblyAI → Translation)
+  - `extract_audio_batch()` - Video workflow command (FFmpeg → Backend Transcription → Translation)
   - `translate_srt_batch()` - Direct SRT translation command
   - `get_task_logs()` - Fetch logs for task detail view
   - `get_log_folder()` - Get logs directory path
@@ -253,14 +255,18 @@ Simplified pipeline: Existing SRT → Translation → Translated SRT
   - Emits `task:started` event
   - Creates temp WAV in `{system_temp}/translation-app-audio/`
 
-- `src-tauri/src/assemblyai.rs` - Transcription API integration
+- `src-tauri/src/backend_transcription.rs` - Transcription backend proxy (NEW)
   - `transcribe_audio()` - Main orchestration function
-  - `upload_audio()` - Uploads WAV file
-  - `create_transcript()` - Submits transcription request
-  - `poll_transcript_status()` - Polls until complete
-  - `download_srt()` - Downloads subtitle file to temp folder with `-original.srt` suffix
+  - `upload_audio()` - Uploads WAV file to YOUR backend
+  - `poll_transcription_status()` - Polls YOUR backend until complete
+  - `download_srt()` - Downloads subtitle file from YOUR backend to temp folder with `-original.srt` suffix
   - `retry_with_backoff()` - Network retry helper (3 attempts, exponential backoff)
   - Emits `transcription:started`, `transcription:polling`, `transcription:complete` events
+  - **Security:** AssemblyAI API key is NEVER sent from client
+
+- `src-tauri/src/assemblyai.rs` - DEPRECATED (replaced by backend_transcription.rs)
+  - Old direct AssemblyAI integration (insecure for production)
+  - Keep for reference or local development only
 
 - `src-tauri/src/translation.rs` - Translation server integration
   - `translate_srt()` - Main translation function
@@ -313,7 +319,8 @@ Simplified pipeline: Existing SRT → Translation → Translated SRT
 
 - `src/hooks/use-extraction-commands.ts` - Video workflow Tauri commands
   - `startExtraction()` - Invokes `extract_audio_batch` command
-  - Passes AssemblyAI API key, target language, translation server URL
+  - Passes transcription server URL, target language, translation server URL
+  - **Security:** No longer passes AssemblyAI API key
 
 - `src/hooks/use-srt-translation-commands.ts` - SRT workflow Tauri commands
   - `selectSrtFiles()` - Opens SRT file picker dialog
@@ -351,11 +358,20 @@ Simplified pipeline: Existing SRT → Translation → Translated SRT
 
 ### Configuration Details
 
-**AssemblyAI Endpoint:**
+**Transcription Backend Endpoint:**
+
+```bash
+# Default (configure YOUR backend URL in .env)
+VITE_TRANSCRIPTION_SERVER_URL=http://localhost:3000/api
+```
+
+Your backend proxies requests to AssemblyAI (EU endpoint recommended):
 
 ```rust
 const ASSEMBLYAI_API_BASE: &str = "https://api.eu.assemblyai.com";
 ```
+
+See `BACKEND_API_SPEC.md` for complete backend implementation guide.
 
 **Polling Configuration:**
 

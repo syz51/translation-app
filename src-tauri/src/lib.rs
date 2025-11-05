@@ -1,4 +1,4 @@
-mod assemblyai;
+mod backend_transcription;
 mod ffmpeg;
 mod logger;
 mod translation;
@@ -20,7 +20,7 @@ fn greet(name: &str) -> String {
 async fn extract_audio_batch(
     tasks: Vec<TaskInfo>,
     output_folder: String,
-    api_key: String,
+    transcription_server_url: String,
     target_language: String,
     translation_server_url: String,
     window: Window,
@@ -35,7 +35,7 @@ async fn extract_audio_batch(
         let window_clone = window.clone();
         let output_folder_clone = output_folder.clone();
         let app_handle_clone = app_handle.clone();
-        let api_key_clone = api_key.clone();
+        let transcription_server_url_clone = transcription_server_url.clone();
         let target_language_clone = target_language.clone();
         let translation_server_url_clone = translation_server_url.clone();
 
@@ -48,8 +48,8 @@ async fn extract_audio_batch(
             match extraction_result {
                 Ok(audio_path) => {
                     // Step 2: Transcribe audio (returns temp SRT path)
-                    let transcription_result = assemblyai::transcribe_audio(
-                        &api_key_clone,
+                    let transcription_result = backend_transcription::transcribe_audio(
+                        &transcription_server_url_clone,
                         &task.id,
                         &audio_path,
                         &task.file_path,
@@ -68,6 +68,7 @@ async fn extract_audio_batch(
                                 &target_language_clone,
                                 &output_folder_clone,
                                 &task.file_path,
+                                false, // Video workflow: no language suffix
                                 &window_clone,
                                 &app_handle_clone,
                             )
@@ -225,6 +226,7 @@ async fn translate_srt_batch(
                 &target_language_clone,
                 &output_folder_clone,
                 &task.file_path, // Use same path for filename extraction
+                true,            // SRT workflow: include language suffix
                 &window_clone,
                 &app_handle_clone,
             )
