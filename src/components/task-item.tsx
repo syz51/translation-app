@@ -7,7 +7,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import type { ExtractionTask } from '@/types/extraction'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,12 +17,12 @@ interface TaskItemProps {
   task: ExtractionTask
 }
 
-export function TaskItem({ task }: TaskItemProps) {
+export const TaskItem = memo(function TaskItem({ task }: TaskItemProps) {
   const { dispatch } = useExtraction()
   const navigate = useNavigate()
   const [now, setNow] = useState(Date.now())
 
-  // Update time every second for in-progress tasks
+  // Update time every 2 seconds for in-progress tasks (reduced frequency)
   useEffect(() => {
     if (
       task.status === 'processing' ||
@@ -31,7 +31,7 @@ export function TaskItem({ task }: TaskItemProps) {
     ) {
       const interval = setInterval(() => {
         setNow(Date.now())
-      }, 1000)
+      }, 2000) // Reduced from 1000ms to 2000ms
 
       return () => clearInterval(interval)
     }
@@ -95,7 +95,7 @@ export function TaskItem({ task }: TaskItemProps) {
     return `${duration}s`
   }
 
-  const handleRemove = () => {
+  const handleRemove = useCallback(() => {
     if (
       task.status !== 'processing' &&
       task.status !== 'transcribing' &&
@@ -103,11 +103,11 @@ export function TaskItem({ task }: TaskItemProps) {
     ) {
       dispatch({ type: 'REMOVE_TASK', taskId: task.id })
     }
-  }
+  }, [dispatch, task.id, task.status])
 
-  const handleViewDetails = () => {
+  const handleViewDetails = useCallback(() => {
     navigate({ to: '/task/$taskId', params: { taskId: task.id } })
-  }
+  }, [navigate, task.id])
 
   return (
     <div className="group rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50">
@@ -181,4 +181,4 @@ export function TaskItem({ task }: TaskItemProps) {
       </div>
     </div>
   )
-}
+})

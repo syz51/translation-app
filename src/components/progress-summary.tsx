@@ -4,10 +4,12 @@ import {
   Languages,
   Loader2,
   Play,
+  Wifi,
+  WifiOff,
   XCircle,
 } from 'lucide-react'
-import { useState } from 'react'
-import { useRouter } from '@tanstack/react-router'
+import { memo, useCallback, useMemo, useState } from 'react'
+import { useMatch } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -20,45 +22,82 @@ import {
 import { useExtraction } from '@/context/extraction-context'
 import { useExtractionCommands } from '@/hooks/use-extraction-commands'
 import { useSrtTranslationCommands } from '@/hooks/use-srt-translation-commands'
+import { useBackendHealth } from '@/hooks/use-backend-health'
+import { env } from '@/env'
 
-export function ProgressSummary() {
+export const ProgressSummary = memo(function ProgressSummary() {
   const { state, dispatch } = useExtraction()
   const { startExtraction } = useExtractionCommands()
   const { startTranslation } = useSrtTranslationCommands()
-  const router = useRouter()
   const [targetLanguage, setTargetLanguage] =
     useState<string>('Chinese Simplified')
 
-  // Detect current route
-  const currentPath = router.state.location.pathname
-  const isSrtFlow = currentPath === '/srt'
-  const isVideoFlow = currentPath === '/video'
+  // Detect current route using useMatch (more efficient than router.state)
+  const isSrtFlow = !!useMatch({ from: '/srt', shouldThrow: false })
+  const isVideoFlow = !!useMatch({ from: '/video', shouldThrow: false })
 
-  const totalTasks = state.tasks.length
-  const completedTasks = state.tasks.filter(
-    (t) => t.status === 'completed',
-  ).length
-  const failedTasks = state.tasks.filter((t) => t.status === 'failed').length
-  const processingTasks = state.tasks.filter(
-    (t) => t.status === 'processing',
-  ).length
-  const transcribingTasks = state.tasks.filter(
-    (t) => t.status === 'transcribing',
-  ).length
-  const translatingTasks = state.tasks.filter(
-    (t) => t.status === 'translating',
-  ).length
-  const pendingTasks = state.tasks.filter((t) => t.status === 'pending').length
+  // Check backend health for video workflow only when needed
+  const backendHealth = useBackendHealth(isVideoFlow && state.tasks.length > 0)
+
+  // Memoize task counts to avoid recalculation on every render
+  const taskCounts = useMemo(() => {
+    const counts = {
+      total: state.tasks.length,
+      completed: 0,
+      failed: 0,
+      processing: 0,
+      transcribing: 0,
+      translating: 0,
+      pending: 0,
+    }
+
+    for (const task of state.tasks) {
+      switch (task.status) {
+        case 'completed':
+          counts.completed++
+          break
+        case 'failed':
+          counts.failed++
+          break
+        case 'processing':
+          counts.processing++
+          break
+        case 'transcribing':
+          counts.transcribing++
+          break
+        case 'translating':
+          counts.translating++
+          break
+        case 'pending':
+          counts.pending++
+          break
+      }
+    }
+
+    return counts
+  }, [state.tasks])
+
+  const {
+    total: totalTasks,
+    completed: completedTasks,
+    failed: failedTasks,
+    processing: processingTasks,
+    transcribing: transcribingTasks,
+    translating: translatingTasks,
+    pending: pendingTasks,
+  } = taskCounts
 
   // For SRT flow, also require target language
+  // For video flow, require backend to be healthy
   const canStart =
     totalTasks > 0 &&
     state.outputFolder &&
     !state.isProcessing &&
     pendingTasks > 0 &&
-    (isSrtFlow ? !!state.targetLanguage : true)
+    (isSrtFlow ? !!state.targetLanguage : true) &&
+    (isVideoFlow ? backendHealth.isHealthy : true)
 
-  const handleStart = async () => {
+  const handleStart = useCallback(async () => {
     console.log('[ProgressSummary] Button clicked', {
       canStart,
       isSrtFlow,
@@ -94,13 +133,41 @@ export function ProgressSummary() {
       }
     } catch (error) {
       console.error('Error starting process:', error)
-      dispatch({ type: 'STOP_PROCESSING' })
-    }
-  }
 
-  const handleClearCompleted = () => {
+      // Mark all pending tasks as failed
+      state.tasks
+        .filter((t) => t.status === 'pending')
+        .forEach((t) => {
+          dispatch({
+            type: 'TASK_FAILED',
+            taskId: t.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+
+      dispatch({ type: 'STOP_PROCESSING' })
+
+      // Show error to user
+      alert(
+        `Failed to start processing: ${error instanceof Error ? error.message : String(error)}\n\nPlease check:\n1. Transcription backend is running at ${env.VITE_TRANSCRIPTION_SERVER_URL}\n2. Translation server is accessible at ${env.VITE_TRANSLATION_SERVER_URL}`,
+      )
+    }
+  }, [
+    canStart,
+    state.outputFolder,
+    state.tasks,
+    state.targetLanguage,
+    isSrtFlow,
+    isVideoFlow,
+    dispatch,
+    startTranslation,
+    startExtraction,
+    targetLanguage,
+  ])
+
+  const handleClearCompleted = useCallback(() => {
     dispatch({ type: 'CLEAR_COMPLETED' })
-  }
+  }, [dispatch])
 
   if (totalTasks === 0) {
     return null
@@ -218,6 +285,33 @@ export function ProgressSummary() {
           </p>
         )}
 
+        {isVideoFlow && totalTasks > 0 && (
+          <div className="flex items-center gap-2">
+            {backendHealth.isChecking ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                <span className="text-sm text-muted-foreground">
+                  Checking transcription backend...
+                </span>
+              </>
+            ) : backendHealth.isHealthy ? (
+              <>
+                <Wifi className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-green-600">
+                  Transcription backend connected
+                </span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="h-4 w-4 text-red-500" />
+                <span className="text-sm text-red-600">
+                  Transcription backend unavailable: {backendHealth.error}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
         <Button
           onClick={handleStart}
           disabled={!canStart}
@@ -233,4 +327,4 @@ export function ProgressSummary() {
       </div>
     </Card>
   )
-}
+})

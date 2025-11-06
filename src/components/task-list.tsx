@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { TaskItem } from './task-item'
 import { Card } from '@/components/ui/card'
 import { useExtraction } from '@/context/extraction-context'
 
-export function TaskList() {
+export const TaskList = memo(function TaskList() {
   const { state } = useExtraction()
 
   if (state.tasks.length === 0) {
@@ -25,4 +26,4 @@ export function TaskList() {
       ))}
     </div>
   )
-}
+})

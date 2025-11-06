@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useReducer } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+} from 'react'
 import type { ReactNode } from 'react'
 import type {
   ExtractionAction,
@@ -203,17 +209,17 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       getLastOutputPath().then((path) => {
         if (path) {
           dispatch({ type: 'SET_LAST_OUTPUT_PATH', path })
-          // Set as default output folder if no folder is currently set
-          if (!state.outputFolder) {
-            dispatch({ type: 'SET_OUTPUT_FOLDER', folder: path })
-          }
+          dispatch({ type: 'SET_OUTPUT_FOLDER', folder: path })
         }
       })
     }
   }, [isReady, getLastOutputPath])
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({ state, dispatch }), [state, dispatch])
+
   return (
-    <ExtractionContext.Provider value={{ state, dispatch }}>
+    <ExtractionContext.Provider value={value}>
       {children}
     </ExtractionContext.Provider>
   )

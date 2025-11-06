@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 import type {
@@ -16,6 +16,12 @@ import { useExtraction } from '@/context/extraction-context'
 
 export function useExtractionEvents() {
   const { dispatch } = useExtraction()
+  const dispatchRef = useRef(dispatch)
+
+  // Keep dispatch ref updated without triggering re-setup
+  useEffect(() => {
+    dispatchRef.current = dispatch
+  }, [dispatch])
 
   useEffect(() => {
     let isMounted = true
@@ -27,7 +33,7 @@ export function useExtractionEvents() {
       const listeners = await Promise.all([
         // Listen for task started events
         listen<TaskStartedEvent>('task:started', (event) => {
-          dispatch({
+          dispatchRef.current({
             type: 'TASK_STARTED',
             taskId: event.payload.taskId,
           })
@@ -35,7 +41,7 @@ export function useExtractionEvents() {
 
         // Listen for task completed events
         listen<TaskCompleteEvent>('task:completed', (event) => {
-          dispatch({
+          dispatchRef.current({
             type: 'TASK_COMPLETED',
             taskId: event.payload.taskId,
             outputPath: event.payload.outputPath,
@@ -44,7 +50,7 @@ export function useExtractionEvents() {
 
         // Listen for task error events
         listen<TaskErrorEvent>('task:failed', (event) => {
-          dispatch({
+          dispatchRef.current({
             type: 'TASK_FAILED',
             taskId: event.payload.taskId,
             error: event.payload.error,
@@ -53,12 +59,12 @@ export function useExtractionEvents() {
 
         // Listen for batch complete event
         listen('batch:complete', () => {
-          dispatch({ type: 'STOP_PROCESSING' })
+          dispatchRef.current({ type: 'STOP_PROCESSING' })
         }),
 
         // Listen for log events
         listen<TaskLogEvent>('task:log', (event) => {
-          dispatch({
+          dispatchRef.current({
             type: 'ADD_LOG_ENTRY',
             taskId: event.payload.taskId,
             logEntry: {
@@ -71,7 +77,7 @@ export function useExtractionEvents() {
 
         // Listen for transcription started events
         listen<TranscriptionStartedEvent>('transcription:started', (event) => {
-          dispatch({
+          dispatchRef.current({
             type: 'TASK_TRANSCRIBING',
             taskId: event.payload.taskId,
           })
@@ -90,7 +96,7 @@ export function useExtractionEvents() {
         listen<TranscriptionCompleteEvent>(
           'transcription:complete',
           (event) => {
-            dispatch({
+            dispatchRef.current({
               type: 'TASK_TRANSCRIPTION_COMPLETE',
               taskId: event.payload.taskId,
               audioPath: event.payload.audioPath,
@@ -101,7 +107,7 @@ export function useExtractionEvents() {
 
         // Listen for translation started events
         listen<TranslationStartedEvent>('translation:started', (event) => {
-          dispatch({
+          dispatchRef.current({
             type: 'TASK_TRANSLATING',
             taskId: event.payload.taskId,
           })
@@ -109,7 +115,7 @@ export function useExtractionEvents() {
 
         // Listen for translation complete events
         listen<TranslationCompleteEvent>('translation:complete', (event) => {
-          dispatch({
+          dispatchRef.current({
             type: 'TRANSLATION_COMPLETE',
             taskId: event.payload.taskId,
             translatedPath: event.payload.translatedPath,
@@ -134,5 +140,5 @@ export function useExtractionEvents() {
       isMounted = false
       unlisteners.forEach((unlisten) => unlisten())
     }
-  }, [dispatch])
+  }, []) // Empty deps intentional: listeners use dispatchRef which stays stable
 }

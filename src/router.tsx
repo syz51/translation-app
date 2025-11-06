@@ -9,6 +9,8 @@ export const getRouter = () => {
     routeTree,
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
+    // Disable preload by default for faster page transitions
+    defaultPreload: 'intent',
   })
 
   return router
