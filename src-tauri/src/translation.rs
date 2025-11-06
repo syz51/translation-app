@@ -114,7 +114,8 @@ pub async fn translate_srt(
     // Create final output path with language suffix (e.g., video_zh.srt, subtitle_en.srt)
     // This allows users to translate the same file to multiple languages without overwrites
     let sanitized_language = target_language.replace(" ", "_");
-    let final_srt_path = Path::new(output_folder).join(format!("{}_{}.srt", file_stem, sanitized_language));
+    let final_srt_path =
+        Path::new(output_folder).join(format!("{}_{}.srt", file_stem, sanitized_language));
     let final_srt_path_str = final_srt_path
         .to_str()
         .context("Invalid final SRT output path")?
