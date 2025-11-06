@@ -276,7 +276,7 @@ Simplified pipeline: Existing SRT → Translation → Translated SRT
   - **Fallback logic:** Copies original SRT to output on translation failure
   - `retry_with_backoff()` - Network retry helper (3 attempts, 1s → 2s → 4s)
   - Emits `translation:started`, `translation:complete` events
-  - Output filename: `{original_name}_{target_lang}.srt`
+  - Output filename: `{original_name}_{target_lang}.srt` (language suffix always included for both workflows)
 
 - `src-tauri/src/logger.rs` - Structured logging system
   - Creates JSON log files per task
@@ -365,13 +365,17 @@ Simplified pipeline: Existing SRT → Translation → Translated SRT
 VITE_TRANSCRIPTION_SERVER_URL=http://localhost:3000/api
 ```
 
-Your backend proxies requests to AssemblyAI (EU endpoint recommended):
+**Important:** You must implement a backend server that proxies transcription requests to AssemblyAI. The backend must implement these endpoints:
+
+- `POST /transcriptions` - Upload audio file, returns `{ job_id, status, created_at }`
+- `GET /transcriptions/{job_id}` - Get status, returns `{ job_id, status, progress?, error?, completed_at? }`
+- `GET /transcriptions/{job_id}/srt` - Download SRT file
+
+The backend stores the AssemblyAI API key securely (never exposed to client). Use the EU endpoint for GDPR compliance:
 
 ```rust
 const ASSEMBLYAI_API_BASE: &str = "https://api.eu.assemblyai.com";
 ```
-
-See `BACKEND_API_SPEC.md` for complete backend implementation guide.
 
 **Polling Configuration:**
 
