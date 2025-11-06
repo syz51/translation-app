@@ -1,6 +1,6 @@
 # Translation App
 
-A desktop application for video transcription and subtitle translation. Extract audio from videos, generate transcripts via AssemblyAI, and translate subtitles using a local translation server.
+A desktop application for video transcription and subtitle translation. Extract audio from videos, generate transcripts via a secure backend proxy (AssemblyAI), and translate subtitles using a local translation server.
 
 ## Features
 
@@ -12,10 +12,10 @@ A desktop application for video transcription and subtitle translation. Extract 
 ### Core Capabilities
 
 - **Audio Extraction:** High-quality WAV extraction from video files using FFmpeg
-- **Automatic Transcription:** Generate SRT subtitles using AssemblyAI's speech recognition API
+- **Automatic Transcription:** Generate SRT subtitles via backend transcription proxy (AssemblyAI)
 - **SRT Translation:** Translate subtitles via local translation server with fallback to original
 - **Batch Processing:** Process up to 4 files in parallel for maximum efficiency
-- **Real-time Logging:** Monitor FFmpeg, AssemblyAI, and translation progress with detailed logs
+- **Real-time Logging:** Monitor FFmpeg, transcription, and translation progress with detailed logs
 - **Language Support:** English and Chinese translation (extensible)
 - **Network Resilience:** Automatic retry with exponential backoff for network failures
 - **Cross-platform:** Works on Windows, macOS, and Linux
@@ -24,7 +24,7 @@ A desktop application for video transcription and subtitle translation. Extract 
 
 1. **Rust:** Install the Rust toolchain from [rustup.rs](https://rustup.rs/)
 1. **Node.js & pnpm:** Install [pnpm](https://pnpm.io/) package manager
-1. **AssemblyAI API Key:** Get your free API key from [AssemblyAI](https://www.assemblyai.com/)
+1. **Transcription Backend:** Deploy a backend server that proxies AssemblyAI API (see [Backend Setup](#backend-setup))
 1. **Translation Server:** Local translation server (defaults to `http://localhost:8000`)
 
 ## Installation
@@ -45,11 +45,45 @@ pnpm install
 3. Create a `.env` file in the project root:
 
 ```env
-VITE_ASSEMBLYAI_API_KEY=your_api_key_here
+VITE_TRANSCRIPTION_SERVER_URL=http://localhost:3000/api
 VITE_TRANSLATION_SERVER_URL=http://localhost:8000
 ```
 
-Get your AssemblyAI API key from [https://www.assemblyai.com/](https://www.assemblyai.com/)
+See `.env.example` for configuration details.
+
+## Backend Setup
+
+**Important:** This app requires a separate backend server to handle transcription requests securely.
+
+The backend must:
+- Store your AssemblyAI API key securely (server-side only)
+- Proxy requests to AssemblyAI API
+- Implement these endpoints:
+  - `POST /api/transcriptions` - Upload audio file
+  - `GET /api/transcriptions/{job_id}` - Get status
+  - `GET /api/transcriptions/{job_id}/srt` - Download SRT
+  - `GET /api/health` - Health check
+
+**Backend Implementation Options:**
+- Node.js/Express + AssemblyAI SDK
+- Python/FastAPI + requests library
+- Go/Gin + HTTP client
+- Any backend that can proxy HTTP requests
+
+**Deployment:**
+- Railway, Render, Heroku (~$7-25/month)
+- AWS Lambda/API Gateway (serverless)
+- DigitalOcean App Platform
+- Self-hosted VPS
+
+**Environment Variables (Backend):**
+```bash
+ASSEMBLYAI_API_KEY=your_secret_key_here  # Keep secret!
+PORT=3000
+ASSEMBLYAI_BASE_URL=https://api.eu.assemblyai.com
+```
+
+Once deployed, update `VITE_TRANSCRIPTION_SERVER_URL` in `.env` with your backend URL.
 
 ## Running the App
 
@@ -103,7 +137,7 @@ The built application will be in `src-tauri/target/release/bundle/`
    - Click "Start Extraction, Transcription & Translation"
    - The app will:
      - Extract audio from each video (16kHz, mono, WAV)
-     - Upload to AssemblyAI for transcription
+     - Upload to backend for transcription
      - Generate original SRT (saved to temp)
      - Translate SRT via translation server
      - Save translated SRT with `_{lang}.srt` suffix
@@ -141,7 +175,7 @@ The built application will be in `src-tauri/target/release/bundle/`
 - **Desktop Wrapper:** Tauri v2 (Rust-based native app)
 - **Build Tool:** Vite with Tailwind CSS v4
 - **Audio Extraction:** FFmpeg (bundled as external binary)
-- **Transcription:** AssemblyAI API (EU endpoint)
+- **Transcription:** Backend proxy → AssemblyAI API (EU endpoint)
 - **Translation:** Local HTTP server (configurable endpoint)
 - **State Management:** React Context API with reducer pattern
 - **UI Components:** Shadcn UI
@@ -152,44 +186,44 @@ The built application will be in `src-tauri/target/release/bundle/`
 #### Video Transcription & Translation Pipeline
 
 ```text
-Video → FFmpeg → Temp WAV → AssemblyAI Upload → Transcription →
-Poll Status → Temp SRT → Translation Server → Final Translated SRT → Cleanup
+Video → FFmpeg → Temp WAV → Backend Upload → Backend → AssemblyAI →
+Poll Backend → Temp SRT → Translation Server → Final Translated SRT → Cleanup
 ```
 
 1. **Audio Extraction (FFmpeg)**
    - Extracts audio track from video
    - Converts to 16kHz mono WAV (optimized for speech)
    - Saves to temp directory: `{system_temp}/translation-app-audio/`
+   - File size validation (500MB max)
 
-2. **Upload to AssemblyAI**
-   - Uploads WAV to AssemblyAI's EU endpoint (GDPR compliant)
-   - Receives upload URL
+2. **Upload to Backend**
+   - Uploads WAV to your backend server
+   - Backend validates and forwards to AssemblyAI
+   - Receives job ID
 
-3. **Create Transcription**
-   - Submits transcription request
-   - Receives transcript ID
-
-4. **Poll for Completion**
-   - Polls every 3 seconds
+3. **Poll Backend for Status**
+   - Backend polls AssemblyAI internally
+   - App polls backend every 3 seconds
    - Max 30 minutes timeout (600 attempts)
    - Automatic retry on network errors (3 attempts, exponential backoff)
+   - Configurable timeouts: upload 5min, poll 10s, download 2min
 
-5. **Download Original SRT**
-   - Downloads completed transcript as SRT
+4. **Download Original SRT**
+   - Downloads completed transcript from backend
    - Saves to temp directory with `-original.srt` suffix
 
-6. **Translate SRT**
+5. **Translate SRT**
    - Sends SRT content to translation server
    - Target language: user-selected (en/zh)
    - Source language: auto-detected server-side
    - **Fallback:** Copies original SRT to output if translation fails
    - Retry logic: 3 attempts with exponential backoff (1s → 2s → 4s)
 
-7. **Save Final SRT**
+6. **Save Final SRT**
    - Saves translated SRT to output folder
    - Filename format: `{video_name}_{target_lang}.srt`
 
-8. **Cleanup**
+7. **Cleanup**
    - Removes temp WAV and temp original SRT on success
    - Keeps temp files for debugging on failure
 
@@ -236,12 +270,19 @@ SRT File → Translation Server → Translated SRT (with _{lang} suffix)
 **Backend (Rust):**
 
 - `src-tauri/src/lib.rs` - Main entry point, command handlers
-  - `extract_audio_batch()` - Video workflow orchestration
+  - `extract_audio_batch()` - Video workflow orchestration with backend health check
   - `translate_srt_batch()` - Direct SRT translation orchestration
   - `get_task_logs()` - Fetch logs for detail view
   - `get_log_folder()` - Get logs directory path
 - `src-tauri/src/ffmpeg.rs` - FFmpeg audio extraction
-- `src-tauri/src/assemblyai.rs` - AssemblyAI transcription API
+- `src-tauri/src/backend_transcription.rs` - Backend proxy client
+  - `validate_backend()` - Health check before processing
+  - `upload_audio()` - Upload to backend with 500MB size limit
+  - `poll_transcription_status()` - Poll backend for job status
+  - `download_srt()` - Download SRT from backend
+  - HTTP client with connection pooling
+  - Retry logic with exponential backoff
+- `src-tauri/src/assemblyai.rs` - DEPRECATED (direct AssemblyAI integration)
 - `src-tauri/src/translation.rs` - Translation server integration
   - `translate_srt()` - Main translation function with fallback
   - Retry logic with exponential backoff
@@ -290,7 +331,7 @@ All environment variables must be prefixed with `VITE_` for client-side access.
 
 Required variables:
 
-- `VITE_ASSEMBLYAI_API_KEY` - Your AssemblyAI API key
+- `VITE_TRANSCRIPTION_SERVER_URL` - Backend proxy endpoint (default: `http://localhost:3000/api`)
 - `VITE_TRANSLATION_SERVER_URL` - Translation server endpoint (default: `http://localhost:8000`)
 
 Environment variables are validated using Zod schemas in `src/env.ts`.
@@ -301,20 +342,25 @@ Environment variables are validated using Zod schemas in `src/env.ts`.
 
 ## Configuration
 
-### AssemblyAI Settings
+### Transcription Backend Settings
 
-The app uses the EU endpoint by default for GDPR compliance:
+The app communicates with your backend server, which then proxies to AssemblyAI's EU endpoint for GDPR compliance.
 
-```rust
-const ASSEMBLYAI_API_BASE: &str = "https://api.eu.assemblyai.com";
+**Backend URL Configuration:**
+
+Configure in `.env`:
+```env
+VITE_TRANSCRIPTION_SERVER_URL=http://localhost:3000/api
 ```
-
-To change to the US endpoint, modify `src-tauri/src/assemblyai.rs`.
 
 **Polling Configuration:**
 
-- Poll interval: 3 seconds
+- Backend poll interval: 3 seconds
 - Max timeout: 30 minutes (600 attempts)
+- Upload timeout: 5 minutes
+- Poll timeout: 10 seconds
+- Download timeout: 2 minutes
+- Max file size: 500 MB
 
 ### Translation Server Settings
 
@@ -365,11 +411,12 @@ Audio extraction settings in `src-tauri/src/ffmpeg.rs`:
 
 ### Retry Configuration
 
-Network retry settings (both AssemblyAI and translation):
+Network retry settings (both backend transcription and translation):
 
 - Max retries: 3 attempts
 - Initial delay: 1 second
 - Backoff: Exponential (1s → 2s → 4s)
+- Retries on network errors only (not API errors)
 
 ### Parallel Processing
 
@@ -380,11 +427,20 @@ Batch processing limits in `src-tauri/src/lib.rs`:
 
 ## Troubleshooting
 
-### "Invalid API key" error
+### "Backend validation failed" error
 
-- Verify your `.env` file contains `VITE_ASSEMBLYAI_API_KEY=your_actual_key`
-- Check that your API key is valid at [AssemblyAI Dashboard](https://www.assemblyai.com/app)
+- Ensure your backend server is running
+- Verify your `.env` file contains correct `VITE_TRANSCRIPTION_SERVER_URL`
+- Check backend health endpoint: `curl http://your-backend/api/health`
+- Check backend logs for errors
 - Restart the app after changing `.env`
+
+### Backend connection errors
+
+- Verify backend server is deployed and accessible
+- Check backend URL in `.env` is correct (include `/api` path if required)
+- Ensure backend has valid AssemblyAI API key configured
+- Check backend firewall/network settings
 
 ### Translation server connection failed
 
@@ -401,9 +457,11 @@ Batch processing limits in `src-tauri/src/lib.rs`:
 
 ### Transcription timeout
 
-- Videos longer than 30 minutes may timeout
+- Videos longer than 30 minutes of audio may timeout
 - Check your internet connection
-- Verify AssemblyAI service status
+- Verify backend server is responding
+- Check backend can reach AssemblyAI API
+- Review backend logs for errors
 
 ### Temp files not cleaned up
 
@@ -417,7 +475,7 @@ Batch processing limits in `src-tauri/src/lib.rs`:
 - Logs stored in app data directory
 - Get path via "Open Logs Folder" button in UI
 - Each task has separate JSON log file
-- Log types: `metadata`, `ffmpeg`, `ffprobe`, `assemblyai`, `translation`, `error`
+- Log types: `metadata`, `ffmpeg`, `ffprobe`, `transcription`, `translation`, `error`
 
 ## Contributing
 
