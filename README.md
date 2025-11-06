@@ -56,6 +56,7 @@ See `.env.example` for configuration details.
 **Important:** This app requires a separate backend server to handle transcription requests securely.
 
 The backend must:
+
 - Store your AssemblyAI API key securely (server-side only)
 - Proxy requests to AssemblyAI API
 - Implement these endpoints:
@@ -65,18 +66,21 @@ The backend must:
   - `GET /api/health` - Health check
 
 **Backend Implementation Options:**
+
 - Node.js/Express + AssemblyAI SDK
 - Python/FastAPI + requests library
 - Go/Gin + HTTP client
 - Any backend that can proxy HTTP requests
 
 **Deployment:**
+
 - Railway, Render, Heroku (~$7-25/month)
 - AWS Lambda/API Gateway (serverless)
 - DigitalOcean App Platform
 - Self-hosted VPS
 
 **Environment Variables (Backend):**
+
 ```bash
 ASSEMBLYAI_API_KEY=your_secret_key_here  # Keep secret!
 PORT=3000
@@ -349,6 +353,7 @@ The app communicates with your backend server, which then proxies to AssemblyAI'
 **Backend URL Configuration:**
 
 Configure in `.env`:
+
 ```env
 VITE_TRANSCRIPTION_SERVER_URL=http://localhost:3000/api
 ```
