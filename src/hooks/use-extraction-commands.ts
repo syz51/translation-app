@@ -73,7 +73,7 @@ export function useExtractionCommands() {
           targetLanguage,
         })),
         outputFolder,
-        apiKey: env.VITE_ASSEMBLYAI_API_KEY,
+        transcriptionServerUrl: env.VITE_TRANSCRIPTION_SERVER_URL,
         targetLanguage,
         translationServerUrl: env.VITE_TRANSLATION_SERVER_URL,
       })
