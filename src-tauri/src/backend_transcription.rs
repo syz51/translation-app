@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Duration;
@@ -8,12 +9,24 @@ const POLL_INTERVAL_SECS: u64 = 3;
 const MAX_POLL_ATTEMPTS: u32 = 600; // 30 minutes max (600 * 3 seconds)
 const MAX_RETRIES: u32 = 3;
 const INITIAL_RETRY_DELAY_MS: u64 = 1000; // Start with 1 second
+const MAX_FILE_SIZE_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
+const UPLOAD_TIMEOUT_SECS: u64 = 300; // 5 minutes for large file uploads
+const POLL_TIMEOUT_SECS: u64 = 10; // 10 seconds for status polling
+const DOWNLOAD_TIMEOUT_SECS: u64 = 120; // 2 minutes for SRT download
+
+// Global HTTP client with connection pooling
+static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .pool_max_idle_per_host(10)
+        .build()
+        .expect("Failed to create HTTP client")
+});
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateTranscriptionResponse {
     job_id: String,
     status: String,
-    created_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -114,7 +127,10 @@ where
     }
 
     // All retries exhausted
-    Err(last_error.unwrap())
+    Err(last_error.unwrap().context(format!(
+        "{} failed after {} retry attempts",
+        operation_name, MAX_RETRIES
+    )))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -145,6 +161,25 @@ pub struct TranscriptionCompletePayload {
     pub transcript_path: String,
 }
 
+/// Validate backend URL is accessible with a health check
+pub async fn validate_backend(backend_url: &str) -> Result<()> {
+    let response = HTTP_CLIENT
+        .get(format!("{}/health", backend_url))
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+        .context("Failed to connect to transcription backend. Please ensure the backend server is running.")?;
+
+    if !response.status().is_success() {
+        anyhow::bail!(
+            "Backend health check failed with status: {}. Please check backend server.",
+            response.status()
+        );
+    }
+
+    Ok(())
+}
+
 /// Upload audio file to backend transcription service
 async fn upload_audio(
     backend_url: &str,
@@ -153,12 +188,31 @@ async fn upload_audio(
     window: &Window,
     app_handle: &AppHandle,
 ) -> Result<String> {
+    // Check file size before processing
+    let metadata = tokio::fs::metadata(audio_path)
+        .await
+        .context("Failed to read audio file metadata")?;
+
+    let file_size = metadata.len();
+    if file_size > MAX_FILE_SIZE_BYTES {
+        let size_mb = file_size as f64 / (1024.0 * 1024.0);
+        let max_mb = MAX_FILE_SIZE_BYTES as f64 / (1024.0 * 1024.0);
+        anyhow::bail!(
+            "Audio file too large: {:.1} MB (max: {:.0} MB)",
+            size_mb,
+            max_mb
+        );
+    }
+
     crate::logger::append_log_entry(
         app_handle,
         window,
         task_id,
-        "metadata",
-        "Uploading audio to transcription backend...",
+        "transcription",
+        &format!(
+            "Uploading audio to transcription backend... (File size: {:.2} MB)",
+            file_size as f64 / (1024.0 * 1024.0)
+        ),
     )
     .await?;
 
@@ -183,8 +237,6 @@ async fn upload_audio(
             let audio_filename = audio_filename.clone();
             let file_bytes = file_bytes_clone.clone();
             async move {
-                let client = reqwest::Client::new();
-
                 // Create multipart form
                 let part = reqwest::multipart::Part::bytes(file_bytes).file_name(audio_filename);
                 let form = reqwest::multipart::Form::new()
@@ -192,8 +244,9 @@ async fn upload_audio(
                     .text("language_detection", "true")
                     .text("speaker_labels", "true");
 
-                let response = client
+                let response = HTTP_CLIENT
                     .post(format!("{}/transcriptions", backend_url))
+                    .timeout(Duration::from_secs(UPLOAD_TIMEOUT_SECS))
                     .multipart(form)
                     .send()
                     .await
@@ -241,7 +294,6 @@ async fn poll_transcription_status(
     window: &Window,
     app_handle: &AppHandle,
 ) -> Result<()> {
-    let client = reqwest::Client::new();
     let mut attempts = 0;
 
     loop {
@@ -258,12 +310,12 @@ async fn poll_transcription_status(
         // Poll with retry logic (network errors only, not status errors)
         let status_response = retry_with_backoff(
             || {
-                let client = client.clone();
                 let backend_url = backend_url.to_string();
                 let job_id = job_id.to_string();
                 async move {
-                    let response = client
+                    let response = HTTP_CLIENT
                         .get(format!("{}/transcriptions/{}", backend_url, job_id))
+                        .timeout(Duration::from_secs(POLL_TIMEOUT_SECS))
                         .send()
                         .await
                         .context("Network error during status polling")?;
@@ -372,7 +424,7 @@ async fn download_srt(
         app_handle,
         window,
         task_id,
-        "metadata",
+        "transcription",
         "Downloading original SRT subtitle file to temp folder...",
     )
     .await?;
@@ -386,9 +438,9 @@ async fn download_srt(
             let backend_url = backend_url.clone();
             let job_id = job_id_str.clone();
             async move {
-                let client = reqwest::Client::new();
-                let response = client
+                let response = HTTP_CLIENT
                     .get(format!("{}/transcriptions/{}/srt", backend_url, job_id))
+                    .timeout(Duration::from_secs(DOWNLOAD_TIMEOUT_SECS))
                     .send()
                     .await
                     .context("Network error during SRT download")?;
@@ -473,7 +525,7 @@ pub async fn transcribe_audio(
         app_handle,
         window,
         task_id,
-        "metadata",
+        "transcription",
         &format!("Starting transcription for: {}", audio_path),
     )
     .await?;
@@ -510,7 +562,7 @@ pub async fn transcribe_audio(
         app_handle,
         window,
         task_id,
-        "metadata",
+        "transcription",
         "Transcription completed! Original SRT ready for translation.",
     )
     .await?;

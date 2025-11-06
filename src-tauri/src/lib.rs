@@ -26,6 +26,11 @@ async fn extract_audio_batch(
     window: Window,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
+    // Validate backend is accessible before processing
+    backend_transcription::validate_backend(&transcription_server_url)
+        .await
+        .map_err(|e| format!("Backend validation failed: {}", e))?;
+
     // Process up to 4 tasks in parallel
     let mut handles = Vec::new();
     let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(4));
