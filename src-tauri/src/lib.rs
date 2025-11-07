@@ -20,14 +20,13 @@ fn greet(name: &str) -> String {
 async fn extract_audio_batch(
     tasks: Vec<TaskInfo>,
     output_folder: String,
-    transcription_server_url: String,
+    backend_url: String,
     target_language: String,
-    translation_server_url: String,
     window: Window,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     // Validate backend is accessible before processing
-    backend_transcription::validate_backend(&transcription_server_url)
+    backend_transcription::validate_backend(&backend_url)
         .await
         .map_err(|e| format!("Backend validation failed: {}", e))?;
 
@@ -40,9 +39,8 @@ async fn extract_audio_batch(
         let window_clone = window.clone();
         let output_folder_clone = output_folder.clone();
         let app_handle_clone = app_handle.clone();
-        let transcription_server_url_clone = transcription_server_url.clone();
+        let backend_url_clone = backend_url.clone();
         let target_language_clone = target_language.clone();
-        let translation_server_url_clone = translation_server_url.clone();
 
         let handle = tokio::spawn(async move {
             // Step 1: Extract audio to temp directory
@@ -54,7 +52,7 @@ async fn extract_audio_batch(
                 Ok(audio_path) => {
                     // Step 2: Transcribe audio (returns temp SRT path)
                     let transcription_result = backend_transcription::transcribe_audio(
-                        &transcription_server_url_clone,
+                        &backend_url_clone,
                         &task.id,
                         &audio_path,
                         &task.file_path,
@@ -67,7 +65,7 @@ async fn extract_audio_batch(
                         Ok(original_srt_path) => {
                             // Step 3: Translate SRT (with fallback to original on failure)
                             let translation_result = translation::translate_srt(
-                                &translation_server_url_clone,
+                                &backend_url_clone,
                                 &task.id,
                                 &original_srt_path,
                                 &target_language_clone,
@@ -205,7 +203,7 @@ async fn translate_srt_batch(
     tasks: Vec<TaskInfo>,
     output_folder: String,
     target_language: String,
-    translation_server_url: String,
+    backend_url: String,
     window: Window,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
@@ -219,12 +217,12 @@ async fn translate_srt_batch(
         let output_folder_clone = output_folder.clone();
         let app_handle_clone = app_handle.clone();
         let target_language_clone = target_language.clone();
-        let translation_server_url_clone = translation_server_url.clone();
+        let backend_url_clone = backend_url.clone();
 
         let handle = tokio::spawn(async move {
             // Directly translate SRT (no audio extraction, no transcription)
             let translation_result = translation::translate_srt(
-                &translation_server_url_clone,
+                &backend_url_clone,
                 &task.id,
                 &task.file_path, // SRT file path (not video)
                 &target_language_clone,

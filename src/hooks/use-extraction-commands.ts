@@ -73,9 +73,8 @@ export function useExtractionCommands() {
           targetLanguage,
         })),
         outputFolder,
-        transcriptionServerUrl: env.VITE_TRANSCRIPTION_SERVER_URL,
+        backendUrl: env.VITE_BACKEND_URL,
         targetLanguage,
-        translationServerUrl: env.VITE_TRANSLATION_SERVER_URL,
       })
     } catch (error) {
       console.error(

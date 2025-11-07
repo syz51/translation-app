@@ -149,7 +149,7 @@ export const ProgressSummary = memo(function ProgressSummary() {
 
       // Show error to user
       alert(
-        `Failed to start processing: ${error instanceof Error ? error.message : String(error)}\n\nPlease check:\n1. Transcription backend is running at ${env.VITE_TRANSCRIPTION_SERVER_URL}\n2. Translation server is accessible at ${env.VITE_TRANSLATION_SERVER_URL}`,
+        `Failed to start processing: ${error instanceof Error ? error.message : String(error)}\n\nPlease check backend is running at ${env.VITE_BACKEND_URL}`,
       )
     }
   }, [

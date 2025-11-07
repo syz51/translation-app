@@ -27,7 +27,7 @@ export function useSrtTranslationCommands() {
       tasks,
       outputFolder,
       targetLanguage,
-      translationServerUrl: env.VITE_TRANSLATION_SERVER_URL,
+      backendUrl: env.VITE_BACKEND_URL,
     })
 
     try {
@@ -38,7 +38,7 @@ export function useSrtTranslationCommands() {
         })),
         outputFolder,
         targetLanguage,
-        translationServerUrl: env.VITE_TRANSLATION_SERVER_URL,
+        backendUrl: env.VITE_BACKEND_URL,
       })
       console.log(
         '[useSrtTranslationCommands] Translation started successfully',

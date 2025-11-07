@@ -9,8 +9,7 @@ export const env = createEnv({
   clientPrefix: 'VITE_',
 
   client: {
-    VITE_TRANSCRIPTION_SERVER_URL: z.url().default('http://localhost:3000/api'),
-    VITE_TRANSLATION_SERVER_URL: z.url().default('http://localhost:8000'),
+    VITE_BACKEND_URL: z.url().default('http://localhost:8000/api/v1'),
   },
 
   /**

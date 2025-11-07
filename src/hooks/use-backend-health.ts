@@ -35,14 +35,11 @@ export function useBackendHealth(shouldCheck: boolean = true) {
       try {
         setStatus((prev) => ({ ...prev, isChecking: true, error: null }))
 
-        const response = await fetch(
-          `${env.VITE_TRANSCRIPTION_SERVER_URL}/health`,
-          {
-            method: 'GET',
-            signal: controller.signal,
-            headers: { 'Content-Type': 'application/json' },
-          },
-        )
+        const response = await fetch(`${env.VITE_BACKEND_URL}/health`, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+        })
 
         if (!mounted) return
 
