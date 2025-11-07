@@ -27,16 +27,22 @@ static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
 struct CreateTranscriptionResponse {
     job_id: String,
     status: String,
+    created_at: String,
+    language_detection: bool,
+    speaker_labels: bool,
+    audio_s3_key: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TranscriptionStatusResponse {
     job_id: String,
     status: String,
+    created_at: String,
+    language_detection: bool,
+    speaker_labels: bool,
+    srt_available: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    progress: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
+    error_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     completed_at: Option<String>,
 }
@@ -240,7 +246,7 @@ async fn upload_audio(
                 // Create multipart form
                 let part = reqwest::multipart::Part::bytes(file_bytes).file_name(audio_filename);
                 let form = reqwest::multipart::Form::new()
-                    .part("audio_file", part)
+                    .part("file", part)
                     .text("language_detection", "true")
                     .text("speaker_labels", "true");
 
@@ -343,19 +349,14 @@ async fn poll_transcription_status(
         .await?;
 
         // Log status
-        let progress_str = status_response
-            .progress
-            .map(|p| format!(" ({}%)", p))
-            .unwrap_or_default();
-
         crate::logger::append_log_entry(
             app_handle,
             window,
             task_id,
             "transcription",
             &format!(
-                "Poll attempt {}: Status = {}{} (Job ID: {})",
-                attempts, status_response.status, progress_str, job_id
+                "Poll attempt {}: Status = {} (Job ID: {})",
+                attempts, status_response.status, job_id
             ),
         )
         .await?;
@@ -385,7 +386,7 @@ async fn poll_transcription_status(
             }
             "error" => {
                 let error_msg = status_response
-                    .error
+                    .error_message
                     .unwrap_or_else(|| "Unknown error".to_string());
                 anyhow::bail!("Transcription failed (Job ID: {}): {}", job_id, error_msg);
             }
@@ -566,6 +567,18 @@ pub async fn transcribe_audio(
         "Transcription completed! Original SRT ready for translation.",
     )
     .await?;
+
+    // Emit transcription complete event
+    window
+        .emit(
+            "transcription:complete",
+            TranscriptionCompletePayload {
+                task_id: task_id.to_string(),
+                audio_path: audio_path.to_string(),
+                transcript_path: temp_srt_path_str.clone(),
+            },
+        )
+        .context("Failed to emit transcription:complete event")?;
 
     Ok(temp_srt_path_str)
 }

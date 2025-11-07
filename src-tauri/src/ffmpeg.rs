@@ -32,14 +32,6 @@ pub struct TaskStartedPayload {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct TaskCompletePayload {
-    #[serde(rename = "taskId")]
-    pub task_id: String,
-    #[serde(rename = "outputPath")]
-    pub output_path: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct TaskErrorPayload {
     #[serde(rename = "taskId")]
     pub task_id: String,
