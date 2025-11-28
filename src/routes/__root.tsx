@@ -3,6 +3,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { ExtractionProvider } from '@/context/extraction-context'
 import { useExtractionEvents } from '@/hooks/use-extraction-events'
+import { Sidebar } from '@/components/sidebar'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -17,7 +18,12 @@ function RootComponentContent() {
 
   return (
     <>
-      <Outlet />
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 overflow-auto">
+          <Outlet />
+        </main>
+      </div>
       {!isTauri && (
         <TanStackDevtools
           config={{

@@ -1,24 +1,17 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useReducer,
-} from 'react'
+import { createContext, useContext, useMemo, useReducer } from 'react'
 import type { ReactNode } from 'react'
 import type {
   ExtractionAction,
   ExtractionState,
   ExtractionTask,
 } from '@/types/extraction'
-import { useSettingsStore } from '@/hooks/use-settings-store'
 
 const initialState: ExtractionState = {
   tasks: [],
-  outputFolder: null,
-  lastOutputPath: null,
   isProcessing: false,
   targetLanguage: null,
+  workflowType: 'video',
+  filterStatus: 'all',
 }
 
 function extractionReducer(
@@ -29,7 +22,8 @@ function extractionReducer(
     case 'ADD_TASKS': {
       const newTasks: Array<ExtractionTask> = action.tasks.map((task) => ({
         ...task,
-        id: crypto.randomUUID(),
+        // Preserve existing ID if present, otherwise generate new one
+        id: task.id || crypto.randomUUID(),
         status: 'pending' as const,
         logs: [],
       }))
@@ -39,22 +33,22 @@ function extractionReducer(
       }
     }
 
-    case 'SET_OUTPUT_FOLDER':
-      return {
-        ...state,
-        outputFolder: action.folder,
-      }
-
-    case 'SET_LAST_OUTPUT_PATH':
-      return {
-        ...state,
-        lastOutputPath: action.path,
-      }
-
     case 'SET_TARGET_LANGUAGE':
       return {
         ...state,
         targetLanguage: action.language,
+      }
+
+    case 'SET_WORKFLOW_TYPE':
+      return {
+        ...state,
+        workflowType: action.workflowType,
+      }
+
+    case 'SET_FILTER_STATUS':
+      return {
+        ...state,
+        filterStatus: action.filterStatus,
       }
 
     case 'START_PROCESSING':
@@ -166,6 +160,34 @@ function extractionReducer(
         tasks: state.tasks.filter((task) => task.id !== action.taskId),
       }
 
+    case 'RETRY_TASK':
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId
+            ? { ...task, status: 'pending' as const, error: undefined }
+            : task,
+        ),
+      }
+
+    case 'DOWNLOAD_TASK':
+      // Download handled via Tauri command in component
+      return state
+
+    case 'OPEN_FOLDER':
+      // Open folder handled via Tauri command in component
+      return state
+
+    case 'CANCEL_TASK':
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId
+            ? { ...task, status: 'failed' as const, error: 'Cancelled by user' }
+            : task,
+        ),
+      }
+
     case 'CLEAR_COMPLETED':
       return {
         ...state,
@@ -201,19 +223,6 @@ const ExtractionContext = createContext<ExtractionContextValue | undefined>(
 
 export function ExtractionProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(extractionReducer, initialState)
-  const { getLastOutputPath, isReady } = useSettingsStore()
-
-  // Load last output path from store on mount
-  useEffect(() => {
-    if (isReady) {
-      getLastOutputPath().then((path) => {
-        if (path) {
-          dispatch({ type: 'SET_LAST_OUTPUT_PATH', path })
-          dispatch({ type: 'SET_OUTPUT_FOLDER', folder: path })
-        }
-      })
-    }
-  }, [isReady, getLastOutputPath])
 
   // Memoize context value to prevent unnecessary re-renders
   const value = useMemo(() => ({ state, dispatch }), [state, dispatch])

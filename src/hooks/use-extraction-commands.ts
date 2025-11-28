@@ -55,15 +55,15 @@ export function useExtractionCommands() {
   /**
    * Starts the extraction, transcription, and translation pipeline.
    * This will:
-   * 1. Extract audio from video files to WAV format
-   * 2. Upload audio to AssemblyAI for transcription
-   * 3. Translate SRT to target language
-   * 4. Generate final SRT subtitle files
+   * 1. Extract audio from video files to WAV format (stored in temp)
+   * 2. Upload audio to backend for transcription
+   * 3. Translate SRT to target language (stored in temp)
+   * 4. User downloads completed files from temp storage
    */
   const startExtraction = async (
     tasks: Array<ExtractionTask>,
-    outputFolder: string,
-    targetLanguage: string = 'Chinese Simplified',
+    backendUrl: string,
+    targetLanguage: string,
   ): Promise<void> => {
     try {
       await invoke('extract_audio_batch', {
@@ -72,8 +72,7 @@ export function useExtractionCommands() {
           filePath: task.filePath,
           targetLanguage,
         })),
-        outputFolder,
-        backendUrl: env.VITE_BACKEND_URL,
+        backendUrl,
         targetLanguage,
       })
     } catch (error) {

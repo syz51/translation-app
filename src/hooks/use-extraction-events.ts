@@ -84,12 +84,9 @@ export function useExtractionEvents() {
         }),
 
         // Listen for transcription polling events
-        listen<TranscriptionPollingEvent>('transcription:polling', (event) => {
-          // Just listening for potential future use (like updating UI with current status)
+        listen<TranscriptionPollingEvent>('transcription:polling', (_event) => {
+          // Listening for potential future use (like updating UI with current status)
           // Logs are already emitted from the backend via task:log events
-          console.log(
-            `Transcription polling: ${event.payload.taskId} - ${event.payload.status}`,
-          )
         }),
 
         // Listen for transcription complete events

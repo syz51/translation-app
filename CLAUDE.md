@@ -11,7 +11,7 @@ This is a video transcription and subtitle translation app built with TanStack R
 1. **Video Transcription & Translation:** Video → Audio → Transcript → Translated SRT
 2. **Direct SRT Translation:** Existing SRT → Translated SRT
 
-Users select their workflow from a landing page (`/`) which routes to either `/video` or `/srt`.
+Users select workflow type from `/new-task` page and manage tasks in `/queue`.
 
 ## Architecture
 
@@ -36,9 +36,9 @@ Users select their workflow from a landing page (`/`) which routes to either `/v
 - `src/main.tsx`: React application entry point
 - `src/routes/`: File-based routing (auto-generates `src/routeTree.gen.ts`)
   - `src/routes/__root.tsx`: Root layout with router outlet and devtools
-  - `src/routes/index.tsx`: Landing page with workflow selection cards
-  - `src/routes/video.tsx`: Video transcription & translation workflow
-  - `src/routes/srt.tsx`: Direct SRT translation workflow
+  - `src/routes/index.tsx`: Landing page redirects to queue
+  - `src/routes/new-task.tsx`: Create new transcription/translation tasks
+  - `src/routes/queue.tsx`: Task queue with filters and management
   - `src/routes/task.$taskId.tsx`: Task detail view with logs
 - `src/router.tsx`: Router configuration
 - `src/env.ts`: Environment variable schema with Zod validation (includes translation server URL)
@@ -134,8 +134,7 @@ pnpx shadcn@latest add <component-name>
 - All client-side vars must be prefixed with `VITE_`
 - All env vars are validated via Zod schemas in `src/env.ts`
 - Import with: `import { env } from '@/env'`
-- Required: `VITE_TRANSCRIPTION_SERVER_URL` (Your secure backend, default: `http://localhost:3000/api`)
-- Required: `VITE_TRANSLATION_SERVER_URL` (default: `http://localhost:8000`)
+- Required: `VITE_BACKEND_URL` (unified backend for transcription & translation, default: `http://localhost:8000/api/v1`)
 
 **TanStack Router:**
 
@@ -285,15 +284,17 @@ Simplified pipeline: Existing SRT → Translation → Translated SRT
 
 **Frontend (React/TypeScript):**
 
-- `src/routes/index.tsx` - Landing page
-  - Two workflow selection cards (Video / SRT)
-  - Routes to `/video` or `/srt`
+- `src/routes/index.tsx` - Landing page (redirects to queue)
 
-- `src/routes/video.tsx` - Video transcription workflow page
-  - File selector, output folder, language selector, progress summary, task list
+- `src/routes/new-task.tsx` - New task creation page
+  - Workflow toggle (Video / SRT)
+  - Unified drop zone for file selection
+  - Language selector, start button
 
-- `src/routes/srt.tsx` - Direct SRT translation workflow page
-  - SRT file selector, language selector, output folder, progress summary, task list
+- `src/routes/queue.tsx` - Task queue page
+  - Filter tabs (All / Running / Failed)
+  - Task list with status, actions
+  - Clear completed button
 
 - `src/routes/task.$taskId.tsx` - Task detail view
   - Real-time log viewer for individual task
@@ -331,7 +332,7 @@ Simplified pipeline: Existing SRT → Translation → Translated SRT
   - Multi-select video files
   - Validates video formats
 
-- `src/components/srt-file-selector.tsx` - SRT file picker
+- `src/components/unified-drop-zone.tsx` - Combined file picker (video/SRT)
   - Drag-drop support
   - Multi-select SRT files
 
@@ -358,11 +359,11 @@ Simplified pipeline: Existing SRT → Translation → Translated SRT
 
 ### Configuration Details
 
-**Transcription Backend Endpoint:**
+**Backend Endpoint:**
 
 ```bash
 # Default (configure YOUR backend URL in .env)
-VITE_TRANSCRIPTION_SERVER_URL=http://localhost:3000/api
+VITE_BACKEND_URL=http://localhost:8000/api/v1
 ```
 
 **Important:** You must implement a backend server that proxies transcription requests to AssemblyAI. The backend must implement these endpoints:
@@ -401,8 +402,8 @@ const INITIAL_RETRY_DELAY_MS: u64 = 1000;   // 1s → 2s → 4s (exponential)
 
 **Translation Server API:**
 
-- Endpoint: `POST {VITE_TRANSLATION_SERVER_URL}/translate`
-- Default URL: `http://localhost:8000`
+- Endpoint: `POST {VITE_BACKEND_URL}/translate`
+- Default URL: `http://localhost:8000/api/v1`
 - Request body:
 
   ```json
@@ -446,7 +447,7 @@ Max 4 concurrent tasks for both video and SRT workflows.
 
 #### Video Workflow Event Flow
 
-```
+```text
 User clicks "Start Extraction, Transcription & Translation"
   → Frontend: dispatch({ type: 'START_PROCESSING' })
   → Frontend: invoke('extract_audio_batch', { tasks, outputFolder, apiKey, targetLanguage, translationServerUrl })
@@ -481,7 +482,7 @@ All tasks complete
 
 #### SRT Workflow Event Flow
 
-```
+```text
 User clicks "Start Translation"
   → Frontend: dispatch({ type: 'START_PROCESSING' })
   → Frontend: invoke('translate_srt_batch', { tasks, outputFolder, targetLanguage, translationServerUrl })

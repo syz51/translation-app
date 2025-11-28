@@ -6,6 +6,10 @@ export type TaskStatus =
   | 'completed'
   | 'failed'
 
+export type WorkflowType = 'video' | 'srt'
+
+export type FilterStatus = 'all' | 'running' | 'failed'
+
 export type LogType =
   | 'metadata'
   | 'ffprobe'
@@ -36,10 +40,10 @@ export interface ExtractionTask {
 
 export interface ExtractionState {
   tasks: Array<ExtractionTask>
-  outputFolder: string | null
-  lastOutputPath: string | null
   isProcessing: boolean
   targetLanguage: string | null
+  workflowType: WorkflowType
+  filterStatus: FilterStatus
 }
 
 export interface TaskCompleteEvent {
@@ -93,11 +97,11 @@ export interface TranslationCompleteEvent {
 export type ExtractionAction =
   | {
       type: 'ADD_TASKS'
-      tasks: Array<Omit<ExtractionTask, 'id' | 'status' | 'logs'>>
+      tasks: Array<Omit<ExtractionTask, 'status' | 'logs'> & { id?: string }>
     }
-  | { type: 'SET_OUTPUT_FOLDER'; folder: string }
-  | { type: 'SET_LAST_OUTPUT_PATH'; path: string | null }
   | { type: 'SET_TARGET_LANGUAGE'; language: string }
+  | { type: 'SET_WORKFLOW_TYPE'; workflowType: WorkflowType }
+  | { type: 'SET_FILTER_STATUS'; filterStatus: FilterStatus }
   | { type: 'START_PROCESSING' }
   | { type: 'STOP_PROCESSING' }
   | { type: 'TASK_STARTED'; taskId: string }
@@ -117,6 +121,10 @@ export type ExtractionAction =
     }
   | { type: 'TASK_FAILED'; taskId: string; error: string }
   | { type: 'REMOVE_TASK'; taskId: string }
+  | { type: 'RETRY_TASK'; taskId: string }
+  | { type: 'DOWNLOAD_TASK'; taskId: string }
+  | { type: 'OPEN_FOLDER'; taskId: string }
+  | { type: 'CANCEL_TASK'; taskId: string }
   | { type: 'CLEAR_COMPLETED' }
   | { type: 'RESET' }
   | { type: 'ADD_LOG_ENTRY'; taskId: string; logEntry: LogEntry }

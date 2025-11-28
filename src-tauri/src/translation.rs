@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Window};
+use tauri::{AppHandle, Emitter, Manager, Window};
 
 const MAX_RETRIES: u32 = 3;
 const INITIAL_RETRY_DELAY_MS: u64 = 1000; // Start with 1 second
@@ -91,14 +91,14 @@ where
 }
 
 /// Main translation function
-/// If translation fails, copies original SRT to output folder as fallback
+/// If translation fails, copies original SRT to temp folder as fallback
 /// Always includes language suffix in output filename (e.g., video_zh.srt)
+/// Files are stored in temp directory until user explicitly downloads them
 pub async fn translate_srt(
     server_url: &str,
     task_id: &str,
     original_srt_path: &str,
     target_language: &str,
-    output_folder: &str,
     original_file_path: &str,
     window: &Window,
     app_handle: &AppHandle,
@@ -111,11 +111,20 @@ pub async fn translate_srt(
         .to_str()
         .context("Invalid file name")?;
 
+    // Create temp directory for completed outputs
+    let temp_dir = app_handle
+        .path()
+        .temp_dir()
+        .context("Failed to get temp directory")?;
+
+    let output_temp_dir = temp_dir.join("translation-app-output").join(task_id);
+    std::fs::create_dir_all(&output_temp_dir).context("Failed to create output temp directory")?;
+
     // Create final output path with language suffix (e.g., video_zh.srt, subtitle_en.srt)
     // This allows users to translate the same file to multiple languages without overwrites
     let sanitized_language = target_language.replace(" ", "_");
     let final_srt_path =
-        Path::new(output_folder).join(format!("{}_{}.srt", file_stem, sanitized_language));
+        output_temp_dir.join(format!("{}_{}.srt", file_stem, sanitized_language));
     let final_srt_path_str = final_srt_path
         .to_str()
         .context("Invalid final SRT output path")?
@@ -217,7 +226,7 @@ pub async fn translate_srt(
                 task_id,
                 "translation",
                 &format!(
-                    "Translation complete: {} entries translated, saved to {}",
+                    "Translation complete: {} entries translated, saved to temp: {}",
                     response.entry_count, final_srt_path_str
                 ),
             )
@@ -244,7 +253,7 @@ pub async fn translate_srt(
                 window,
                 task_id,
                 "metadata",
-                &format!("Original SRT saved to: {}", final_srt_path_str),
+                &format!("Original SRT saved to temp: {}", final_srt_path_str),
             )
             .await?;
         }

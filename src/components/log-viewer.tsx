@@ -103,14 +103,14 @@ export function LogViewer({ logs }: LogViewerProps) {
 
   if (logs.length === 0) {
     return (
-      <Card className="bg-slate-900 p-4">
+      <Card className="bg-card p-4">
         <p className="text-center text-muted-foreground">No logs available</p>
       </Card>
     )
   }
 
   return (
-    <Card className="relative bg-slate-900 p-4">
+    <Card className="relative bg-card p-4">
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -119,15 +119,15 @@ export function LogViewer({ logs }: LogViewerProps) {
         {logs.map((log, index) => (
           <div
             key={`${log.timestamp}-${index}`}
-            className="flex gap-2 border-b border-slate-800 pb-1 last:border-0"
+            className="flex gap-2 border-b border-border pb-1 last:border-0"
           >
-            <span className="text-slate-500">
+            <span className="text-muted-foreground">
               {formatTimestamp(log.timestamp)}
             </span>
             <span className={`font-semibold ${getLogColor(log.type)}`}>
               [{getLogLabel(log.type)}]
             </span>
-            <span className="flex-1 text-slate-300">{log.message}</span>
+            <span className="flex-1 text-card-foreground">{log.message}</span>
           </div>
         ))}
         <div ref={logEndRef} />

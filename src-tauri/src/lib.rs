@@ -5,7 +5,7 @@ mod translation;
 
 use ffmpeg::{extract_audio_to_wav, TaskErrorPayload, TaskInfo};
 use serde::Serialize;
-use tauri::{Emitter, Window};
+use tauri::{Emitter, Manager, Window};
 
 #[derive(Debug, Clone, Serialize)]
 struct BatchCompletePayload {}
@@ -19,7 +19,6 @@ fn greet(name: &str) -> String {
 #[tauri::command]
 async fn extract_audio_batch(
     tasks: Vec<TaskInfo>,
-    output_folder: String,
     backend_url: String,
     target_language: String,
     window: Window,
@@ -37,7 +36,6 @@ async fn extract_audio_batch(
     for task in tasks {
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let window_clone = window.clone();
-        let output_folder_clone = output_folder.clone();
         let app_handle_clone = app_handle.clone();
         let backend_url_clone = backend_url.clone();
         let target_language_clone = target_language.clone();
@@ -63,13 +61,12 @@ async fn extract_audio_batch(
 
                     match transcription_result {
                         Ok(original_srt_path) => {
-                            // Step 3: Translate SRT (with fallback to original on failure)
+                            // Step 3: Translate SRT to temp directory (with fallback to original on failure)
                             let translation_result = translation::translate_srt(
                                 &backend_url_clone,
                                 &task.id,
                                 &original_srt_path,
                                 &target_language_clone,
-                                &output_folder_clone,
                                 &task.file_path,
                                 &window_clone,
                                 &app_handle_clone,
@@ -187,21 +184,25 @@ async fn extract_audio_batch(
         handles.push(handle);
     }
 
-    // Wait for all tasks to complete
-    for handle in handles {
-        let _ = handle.await;
-    }
+    // Spawn background task to wait for all tasks and emit batch complete
+    let window_clone = window.clone();
+    tokio::spawn(async move {
+        // Wait for all tasks to complete
+        for handle in handles {
+            let _ = handle.await;
+        }
 
-    // Emit batch complete event
-    let _ = window.emit("batch:complete", BatchCompletePayload {});
+        // Emit batch complete event
+        let _ = window_clone.emit("batch:complete", BatchCompletePayload {});
+    });
 
+    // Return immediately so frontend can accept new tasks
     Ok(())
 }
 
 #[tauri::command]
 async fn translate_srt_batch(
     tasks: Vec<TaskInfo>,
-    output_folder: String,
     target_language: String,
     backend_url: String,
     window: Window,
@@ -214,19 +215,17 @@ async fn translate_srt_batch(
     for task in tasks {
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let window_clone = window.clone();
-        let output_folder_clone = output_folder.clone();
         let app_handle_clone = app_handle.clone();
         let target_language_clone = target_language.clone();
         let backend_url_clone = backend_url.clone();
 
         let handle = tokio::spawn(async move {
-            // Directly translate SRT (no audio extraction, no transcription)
+            // Directly translate SRT to temp directory (no audio extraction, no transcription)
             let translation_result = translation::translate_srt(
                 &backend_url_clone,
                 &task.id,
                 &task.file_path, // SRT file path (not video)
                 &target_language_clone,
-                &output_folder_clone,
                 &task.file_path, // Use same path for filename extraction
                 &window_clone,
                 &app_handle_clone,
@@ -255,14 +254,19 @@ async fn translate_srt_batch(
         handles.push(handle);
     }
 
-    // Wait for all tasks to complete
-    for handle in handles {
-        let _ = handle.await;
-    }
+    // Spawn background task to wait for all tasks and emit batch complete
+    let window_clone = window.clone();
+    tokio::spawn(async move {
+        // Wait for all tasks to complete
+        for handle in handles {
+            let _ = handle.await;
+        }
 
-    // Emit batch complete event
-    let _ = window.emit("batch:complete", BatchCompletePayload {});
+        // Emit batch complete event
+        let _ = window_clone.emit("batch:complete", BatchCompletePayload {});
+    });
 
+    // Return immediately so frontend can accept new tasks
     Ok(())
 }
 
@@ -309,6 +313,128 @@ async fn get_log_folder(app_handle: tauri::AppHandle) -> Result<String, String> 
         .map(|s| s.to_string())
 }
 
+#[tauri::command]
+async fn get_temp_output_folder(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let temp_dir = app_handle
+        .path()
+        .temp_dir()
+        .map_err(|e| format!("Failed to get temp directory: {}", e))?;
+
+    let output_dir = temp_dir.join("translation-app-output");
+
+    output_dir
+        .to_str()
+        .ok_or_else(|| "Invalid temp output folder path".to_string())
+        .map(|s| s.to_string())
+}
+
+/// Copy completed file from temp storage to user-selected destination
+#[tauri::command]
+async fn copy_completed_file(
+    task_id: String,
+    destination_path: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    // Get temp output directory for this task
+    let temp_dir = app_handle
+        .path()
+        .temp_dir()
+        .map_err(|e| format!("Failed to get temp directory: {}", e))?;
+
+    let task_temp_dir = temp_dir.join("translation-app-output").join(&task_id);
+
+    // Find the SRT file in the task's temp directory
+    let mut srt_file_path = None;
+    if task_temp_dir.exists() {
+        for entry in std::fs::read_dir(&task_temp_dir).map_err(|e| format!("Failed to read temp dir: {}", e))? {
+            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("srt") {
+                srt_file_path = Some(path);
+                break;
+            }
+        }
+    }
+
+    let source_path = srt_file_path.ok_or_else(|| {
+        format!("Completed file not found for task {}. File may have been cleaned up.", task_id)
+    })?;
+
+    // Copy file to destination
+    tokio::fs::copy(&source_path, &destination_path)
+        .await
+        .map_err(|e| format!("Failed to copy file: {}", e))?;
+
+    Ok(())
+}
+
+/// Get the size of a completed file in bytes
+#[tauri::command]
+async fn get_completed_file_size(
+    task_id: String,
+    app_handle: tauri::AppHandle,
+) -> Result<u64, String> {
+    // Get temp output directory for this task
+    let temp_dir = app_handle
+        .path()
+        .temp_dir()
+        .map_err(|e| format!("Failed to get temp directory: {}", e))?;
+
+    let task_temp_dir = temp_dir.join("translation-app-output").join(&task_id);
+
+    // Find the SRT file in the task's temp directory
+    let mut srt_file_path = None;
+    if task_temp_dir.exists() {
+        for entry in std::fs::read_dir(&task_temp_dir).map_err(|e| format!("Failed to read temp dir: {}", e))? {
+            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("srt") {
+                srt_file_path = Some(path);
+                break;
+            }
+        }
+    }
+
+    let source_path = srt_file_path.ok_or_else(|| {
+        format!("Completed file not found for task {}", task_id)
+    })?;
+
+    // Get file metadata
+    let metadata = tokio::fs::metadata(&source_path)
+        .await
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+
+    Ok(metadata.len())
+}
+
+/// Delete temp files for a task
+#[tauri::command]
+async fn delete_task_files(
+    task_id: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    // Get temp directory
+    let temp_dir = app_handle
+        .path()
+        .temp_dir()
+        .map_err(|e| format!("Failed to get temp directory: {}", e))?;
+
+    // Delete output files
+    let output_temp_dir = temp_dir.join("translation-app-output").join(&task_id);
+    if output_temp_dir.exists() {
+        tokio::fs::remove_dir_all(&output_temp_dir)
+            .await
+            .map_err(|e| format!("Failed to delete output temp dir: {}", e))?;
+    }
+
+    // Delete task logs
+    logger::delete_task_log(&app_handle, &task_id)
+        .await
+        .map_err(|e| format!("Failed to delete task logs: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -322,7 +448,11 @@ pub fn run() {
             translate_srt_batch,
             cancel_extraction,
             get_task_logs,
-            get_log_folder
+            get_log_folder,
+            get_temp_output_folder,
+            copy_completed_file,
+            get_completed_file_size,
+            delete_task_files
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

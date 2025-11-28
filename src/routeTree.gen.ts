@@ -9,19 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VideoRouteImport } from './routes/video'
-import { Route as SrtRouteImport } from './routes/srt'
+import { Route as QueueRouteImport } from './routes/queue'
+import { Route as NewTaskRouteImport } from './routes/new-task'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TaskTaskIdRouteImport } from './routes/task.$taskId'
 
-const VideoRoute = VideoRouteImport.update({
-  id: '/video',
-  path: '/video',
+const QueueRoute = QueueRouteImport.update({
+  id: '/queue',
+  path: '/queue',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SrtRoute = SrtRouteImport.update({
-  id: '/srt',
-  path: '/srt',
+const NewTaskRoute = NewTaskRouteImport.update({
+  id: '/new-task',
+  path: '/new-task',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,52 +37,52 @@ const TaskTaskIdRoute = TaskTaskIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/srt': typeof SrtRoute
-  '/video': typeof VideoRoute
+  '/new-task': typeof NewTaskRoute
+  '/queue': typeof QueueRoute
   '/task/$taskId': typeof TaskTaskIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/srt': typeof SrtRoute
-  '/video': typeof VideoRoute
+  '/new-task': typeof NewTaskRoute
+  '/queue': typeof QueueRoute
   '/task/$taskId': typeof TaskTaskIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/srt': typeof SrtRoute
-  '/video': typeof VideoRoute
+  '/new-task': typeof NewTaskRoute
+  '/queue': typeof QueueRoute
   '/task/$taskId': typeof TaskTaskIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/srt' | '/video' | '/task/$taskId'
+  fullPaths: '/' | '/new-task' | '/queue' | '/task/$taskId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/srt' | '/video' | '/task/$taskId'
-  id: '__root__' | '/' | '/srt' | '/video' | '/task/$taskId'
+  to: '/' | '/new-task' | '/queue' | '/task/$taskId'
+  id: '__root__' | '/' | '/new-task' | '/queue' | '/task/$taskId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SrtRoute: typeof SrtRoute
-  VideoRoute: typeof VideoRoute
+  NewTaskRoute: typeof NewTaskRoute
+  QueueRoute: typeof QueueRoute
   TaskTaskIdRoute: typeof TaskTaskIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/video': {
-      id: '/video'
-      path: '/video'
-      fullPath: '/video'
-      preLoaderRoute: typeof VideoRouteImport
+    '/queue': {
+      id: '/queue'
+      path: '/queue'
+      fullPath: '/queue'
+      preLoaderRoute: typeof QueueRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/srt': {
-      id: '/srt'
-      path: '/srt'
-      fullPath: '/srt'
-      preLoaderRoute: typeof SrtRouteImport
+    '/new-task': {
+      id: '/new-task'
+      path: '/new-task'
+      fullPath: '/new-task'
+      preLoaderRoute: typeof NewTaskRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -104,8 +104,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SrtRoute: SrtRoute,
-  VideoRoute: VideoRoute,
+  NewTaskRoute: NewTaskRoute,
+  QueueRoute: QueueRoute,
   TaskTaskIdRoute: TaskTaskIdRoute,
 }
 export const routeTree = rootRouteImport

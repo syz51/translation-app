@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
-import { env } from '@/env'
+import type { ExtractionTask } from '@/types/extraction'
 
 export function useSrtTranslationCommands() {
   const selectSrtFiles = async (): Promise<Array<string>> => {
@@ -19,26 +19,24 @@ export function useSrtTranslationCommands() {
   }
 
   const startTranslation = async (
-    tasks: Array<{ taskId: string; filePath: string }>,
-    outputFolder: string,
+    tasks: Array<ExtractionTask>,
     targetLanguage: string,
+    backendUrl: string,
   ) => {
     console.log('[useSrtTranslationCommands] Starting translation with:', {
       tasks,
-      outputFolder,
       targetLanguage,
-      backendUrl: env.VITE_BACKEND_URL,
+      backendUrl,
     })
 
     try {
       await invoke('translate_srt_batch', {
         tasks: tasks.map((t) => ({
-          id: t.taskId,
+          id: t.id,
           filePath: t.filePath,
         })),
-        outputFolder,
         targetLanguage,
-        backendUrl: env.VITE_BACKEND_URL,
+        backendUrl,
       })
       console.log(
         '[useSrtTranslationCommands] Translation started successfully',

@@ -147,3 +147,17 @@ pub async fn read_task_logs(app_handle: &AppHandle, task_id: &str) -> Result<Vec
 
     Ok(entries)
 }
+
+/// Delete the log file for a task
+pub async fn delete_task_log(app_handle: &AppHandle, task_id: &str) -> Result<()> {
+    let log_path = get_task_log_path(app_handle, task_id).await?;
+
+    // Delete log file if it exists
+    if log_path.exists() {
+        fs::remove_file(&log_path)
+            .await
+            .context("Failed to delete log file")?;
+    }
+
+    Ok(())
+}
