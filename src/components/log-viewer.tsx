@@ -1,7 +1,6 @@
+import { ArrowDown, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown } from 'lucide-react'
 import type { LogEntry } from '@/types/extraction'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
 interface LogViewerProps {
@@ -14,56 +13,54 @@ export function LogViewer({ logs }: LogViewerProps) {
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
 
-  // Check if user is at the bottom of the scroll container
   const checkIfAtBottom = () => {
     const container = scrollContainerRef.current
     if (!container) return true
 
-    const threshold = 50 // pixels from bottom to consider "at bottom"
-    const isAtBottom =
+    const threshold = 50
+
+    return (
       container.scrollHeight - container.scrollTop - container.clientHeight <
       threshold
-
-    return isAtBottom
+    )
   }
 
-  // Handle scroll events to detect if user scrolled up
   const handleScroll = () => {
     const isAtBottom = checkIfAtBottom()
     setIsAutoScrollEnabled(isAtBottom)
     setShowScrollToBottom(!isAtBottom)
   }
 
-  // Auto-scroll to bottom when new logs are added, but only if auto-scroll is enabled
   useEffect(() => {
     if (isAutoScrollEnabled) {
       logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [logs, isAutoScrollEnabled])
 
-  // Scroll to bottom manually when button is clicked
   const scrollToBottom = () => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     setIsAutoScrollEnabled(true)
     setShowScrollToBottom(false)
   }
 
+  const errorCount = logs.filter((log) => log.type === 'error').length
+
   const getLogColor = (type: string) => {
     switch (type) {
       case 'metadata':
-        return 'text-blue-400'
+        return 'text-sky-300'
       case 'ffprobe':
-        return 'text-purple-400'
+        return 'text-violet-300'
       case 'ffmpeg':
-        return 'text-green-400'
+        return 'text-emerald-300'
       case 'assemblyai':
-        return 'text-orange-400'
+        return 'text-amber-200'
       case 'translation':
-        return 'text-yellow-400'
+        return 'text-cyan-200'
       case 'error':
-        return 'text-red-400'
+        return 'text-rose-300'
       default:
-        return 'text-gray-400'
+        return 'text-white/[0.58]'
     }
   }
 
@@ -103,45 +100,64 @@ export function LogViewer({ logs }: LogViewerProps) {
 
   if (logs.length === 0) {
     return (
-      <Card className="bg-slate-900 p-4">
-        <p className="text-center text-muted-foreground">No logs available</p>
-      </Card>
+      <div className="rounded-[1.6rem] border border-white/[0.08] bg-black/[0.24] px-6 py-12 text-center">
+        <p className="display-type text-3xl text-white">No logs yet</p>
+        <p className="mt-3 text-sm leading-6 text-white/[0.6]">
+          Logs will appear here as soon as the task starts emitting events.
+        </p>
+      </div>
     )
   }
 
   return (
-    <Card className="relative bg-slate-900 p-4">
+    <div className="relative overflow-hidden rounded-[1.6rem] border border-white/[0.08] bg-black/[0.3]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-2 text-[var(--app-accent)]">
+            <Terminal className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Live Task Logs</p>
+            <p className="text-xs text-white/[0.52]">
+              {logs.length} entries
+              {errorCount > 0 ? ` • ${errorCount} errors` : ' • no errors'}
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="max-h-[600px] space-y-1 overflow-y-auto font-mono text-xs"
+        className="max-h-[560px] space-y-2 overflow-y-auto px-5 py-4 font-mono text-xs"
       >
         {logs.map((log, index) => (
           <div
             key={`${log.timestamp}-${index}`}
-            className="flex gap-2 border-b border-slate-800 pb-1 last:border-0"
+            className="grid gap-2 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-3 py-3 md:grid-cols-[100px_120px_minmax(0,1fr)]"
           >
-            <span className="text-slate-500">
+            <span className="text-white/[0.4]">
               {formatTimestamp(log.timestamp)}
             </span>
             <span className={`font-semibold ${getLogColor(log.type)}`}>
-              [{getLogLabel(log.type)}]
+              {getLogLabel(log.type)}
             </span>
-            <span className="flex-1 text-slate-300">{log.message}</span>
+            <span className="break-words text-white/[0.72]">{log.message}</span>
           </div>
         ))}
         <div ref={logEndRef} />
       </div>
+
       {showScrollToBottom && (
         <Button
           onClick={scrollToBottom}
           size="sm"
-          className="absolute right-6 bottom-6 rounded-full shadow-lg"
+          className="absolute right-6 bottom-6 rounded-full shadow-[0_12px_24px_rgba(0,0,0,0.25)]"
           title="Scroll to bottom"
         >
           <ArrowDown className="h-4 w-4" />
         </Button>
       )}
-    </Card>
+    </div>
   )
 }
