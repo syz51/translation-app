@@ -1,6 +1,7 @@
 import {
   CheckCircle2,
   Eye,
+  FileText,
   FileVideo,
   Loader2,
   Trash2,
@@ -17,12 +18,19 @@ interface TaskItemProps {
   task: ExtractionTask
 }
 
+type StageTone = 'future' | 'done' | 'active' | 'failed'
+
+const VIDEO_STAGES = ['Queued', 'Extract', 'Transcribe', 'Translate', 'Done']
+const SRT_STAGES = ['Queued', 'Translate', 'Done']
+
 export const TaskItem = memo(function TaskItem({ task }: TaskItemProps) {
   const { dispatch } = useExtraction()
   const navigate = useNavigate()
   const [now, setNow] = useState(Date.now())
 
-  // Update time every 2 seconds for in-progress tasks (reduced frequency)
+  const isSubtitleTask = task.fileName.toLowerCase().endsWith('.srt')
+  const stages = isSubtitleTask ? SRT_STAGES : VIDEO_STAGES
+
   useEffect(() => {
     if (
       task.status === 'processing' ||
@@ -31,62 +39,11 @@ export const TaskItem = memo(function TaskItem({ task }: TaskItemProps) {
     ) {
       const interval = setInterval(() => {
         setNow(Date.now())
-      }, 2000) // Reduced from 1000ms to 2000ms
+      }, 2000)
 
       return () => clearInterval(interval)
     }
   }, [task.status])
-
-  const getStatusColor = () => {
-    switch (task.status) {
-      case 'completed':
-        return 'bg-green-500/10 text-green-500 border-green-500/20'
-      case 'failed':
-        return 'bg-red-500/10 text-red-500 border-red-500/20'
-      case 'processing':
-        return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-      case 'transcribing':
-        return 'bg-purple-500/10 text-purple-500 border-purple-500/20'
-      case 'translating':
-        return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-      default:
-        return 'bg-gray-500/10 text-gray-500 border-gray-500/20'
-    }
-  }
-
-  const getStatusIcon = () => {
-    switch (task.status) {
-      case 'completed':
-        return <CheckCircle2 className="h-4 w-4" />
-      case 'failed':
-        return <XCircle className="h-4 w-4" />
-      case 'processing':
-        return <Loader2 className="h-4 w-4 animate-spin" />
-      case 'transcribing':
-        return <Loader2 className="h-4 w-4 animate-spin" />
-      case 'translating':
-        return <Loader2 className="h-4 w-4 animate-spin" />
-      default:
-        return <FileVideo className="h-4 w-4" />
-    }
-  }
-
-  const getStatusText = () => {
-    switch (task.status) {
-      case 'completed':
-        return 'Completed'
-      case 'failed':
-        return 'Failed'
-      case 'processing':
-        return 'Extracting Audio'
-      case 'transcribing':
-        return 'Transcribing'
-      case 'translating':
-        return 'Translating'
-      default:
-        return 'Pending'
-    }
-  }
 
   const getDuration = () => {
     if (!task.startTime) return null
@@ -109,76 +66,188 @@ export const TaskItem = memo(function TaskItem({ task }: TaskItemProps) {
     navigate({ to: '/task/$taskId', params: { taskId: task.id } })
   }, [navigate, task.id])
 
+  const statusMeta = (() => {
+    switch (task.status) {
+      case 'completed':
+        return {
+          label: 'Completed',
+          icon: <CheckCircle2 className="h-4 w-4" />,
+          badge: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300',
+          step: stages.length - 1,
+        }
+      case 'failed':
+        return {
+          label: 'Failed',
+          icon: <XCircle className="h-4 w-4" />,
+          badge: 'border-rose-400/20 bg-rose-400/10 text-rose-300',
+          step: Math.max(1, stages.length - 2),
+        }
+      case 'processing':
+        return {
+          label: isSubtitleTask ? 'Preparing' : 'Extracting audio',
+          icon: <Loader2 className="h-4 w-4 animate-spin" />,
+          badge: 'border-sky-400/20 bg-sky-400/10 text-sky-300',
+          step: isSubtitleTask ? 0 : 1,
+        }
+      case 'transcribing':
+        return {
+          label: 'Transcribing',
+          icon: <Loader2 className="h-4 w-4 animate-spin" />,
+          badge: 'border-indigo-400/20 bg-indigo-400/10 text-indigo-300',
+          step: 2,
+        }
+      case 'translating':
+        return {
+          label: 'Translating',
+          icon: <Loader2 className="h-4 w-4 animate-spin" />,
+          badge: 'border-amber-400/20 bg-amber-400/10 text-amber-200',
+          step: isSubtitleTask ? 1 : 3,
+        }
+      default:
+        return {
+          label: 'Queued',
+          icon: isSubtitleTask ? (
+            <FileText className="h-4 w-4" />
+          ) : (
+            <FileVideo className="h-4 w-4" />
+          ),
+          badge: 'border-white/10 bg-white/[0.04] text-white/70',
+          step: 0,
+        }
+    }
+  })()
+
+  const getStageTone = (index: number): StageTone => {
+    if (task.status === 'failed') {
+      if (index < statusMeta.step) return 'done'
+      if (index === statusMeta.step) return 'failed'
+      return 'future'
+    }
+
+    if (index < statusMeta.step) return 'done'
+    if (index === statusMeta.step) return 'active'
+    return 'future'
+  }
+
+  const primaryPath = task.outputPath || task.transcriptPath
+  const primaryPathLabel =
+    task.status === 'completed'
+      ? 'Output'
+      : task.transcriptPath
+        ? 'Transcript'
+        : 'Source'
+
   return (
-    <div className="group rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="rounded-md bg-muted p-2">
-              <FileVideo className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{task.fileName}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <Badge variant="outline" className={getStatusColor()}>
-                  <span className="mr-1">{getStatusIcon()}</span>
-                  {getStatusText()}
-                </Badge>
-                {task.targetLanguage && (
-                  <Badge variant="outline">
-                    Target: {task.targetLanguage.toUpperCase()}
+    <article className="rounded-[1.6rem] border border-white/[0.08] bg-black/[0.18] p-5 transition-colors hover:border-white/[0.14]">
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-4">
+              <div className="rounded-3xl border border-white/[0.08] bg-white/[0.05] p-3 text-white/[0.78]">
+                {isSubtitleTask ? (
+                  <FileText className="h-5 w-5" />
+                ) : (
+                  <FileVideo className="h-5 w-5" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-lg font-semibold text-white">
+                  {task.fileName}
+                </p>
+                <p className="mt-1 truncate text-sm text-white/[0.5]">
+                  {task.filePath}
+                </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className={statusMeta.badge}>
+                    <span className="mr-1">{statusMeta.icon}</span>
+                    {statusMeta.label}
                   </Badge>
-                )}
-                {getDuration() && (
-                  <span className="text-xs text-muted-foreground">
-                    {getDuration()}
-                  </span>
-                )}
+                  {getDuration() && (
+                    <Badge
+                      variant="outline"
+                      className="border-white/[0.08] bg-white/[0.03] text-white/[0.68]"
+                    >
+                      {getDuration()}
+                    </Badge>
+                  )}
+                  {task.targetLanguage && (
+                    <Badge
+                      variant="outline"
+                      className="border-white/[0.08] bg-white/[0.03] text-white/[0.68]"
+                    >
+                      {task.targetLanguage}
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          {task.error && <p className="text-sm text-red-500">{task.error}</p>}
-
-          {task.outputPath && (
-            <p className="truncate text-xs text-muted-foreground">
-              Audio: {task.outputPath}
-            </p>
-          )}
-
-          {task.transcriptPath && (
-            <p className="truncate text-xs text-muted-foreground">
-              Transcript: {task.transcriptPath}
-            </p>
-          )}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleViewDetails}
+              className="rounded-full border-white/[0.08] bg-white/[0.03] text-white/[0.72] hover:bg-white/[0.08] hover:text-white"
+            >
+              <Eye className="h-4 w-4" />
+              Details
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRemove}
+              disabled={
+                task.status === 'processing' ||
+                task.status === 'transcribing' ||
+                task.status === 'translating'
+              }
+              className="rounded-full border-white/[0.08] bg-white/[0.03] text-white/[0.72] hover:bg-white/[0.08] hover:text-white"
+            >
+              <Trash2 className="h-4 w-4" />
+              Remove
+            </Button>
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleViewDetails}
-            className="opacity-0 transition-opacity group-hover:opacity-100"
-            title="View Details"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRemove}
-            disabled={
-              task.status === 'processing' ||
-              task.status === 'transcribing' ||
-              task.status === 'translating'
-            }
-            className="opacity-0 transition-opacity group-hover:opacity-100"
-            title="Remove Task"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {stages.map((stage, index) => {
+            const tone = getStageTone(index)
+            const className =
+              tone === 'done'
+                ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+                : tone === 'active'
+                  ? 'border-[#f7b32b]/30 bg-[#f7b32b]/10 text-white'
+                  : tone === 'failed'
+                    ? 'border-rose-400/20 bg-rose-400/10 text-rose-200'
+                    : 'border-white/[0.08] bg-white/[0.03] text-white/[0.48]'
+
+            return (
+              <div
+                key={`${task.id}-${stage}`}
+                className={`rounded-2xl border px-3 py-3 text-sm font-medium ${className}`}
+              >
+                {stage}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+          <div>
+            {task.error ? (
+              <p className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm leading-6 text-rose-200">
+                {task.error}
+              </p>
+            ) : (
+              <p className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white/[0.66]">
+                {primaryPathLabel}: {primaryPath || task.filePath}
+              </p>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </article>
   )
 })
