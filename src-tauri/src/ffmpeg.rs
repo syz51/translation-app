@@ -39,11 +39,8 @@ pub struct TaskErrorPayload {
 }
 
 /// Get the path to a bundled binary, falling back to system PATH in dev mode
-fn get_binary_path(app_handle: &AppHandle, binary_name: &str) -> Result<PathBuf> {
-    use tauri::Manager;
-
-    // Check if we're in development mode by attempting to resolve the resource path
-    // In dev mode, this will typically fail or point to a non-existent location
+fn get_binary_path(_app_handle: &AppHandle, binary_name: &str) -> Result<PathBuf> {
+    // Debug builds run from the developer environment, so we rely on PATH there.
     let is_dev_mode = cfg!(debug_assertions);
 
     if is_dev_mode {
@@ -51,8 +48,8 @@ fn get_binary_path(app_handle: &AppHandle, binary_name: &str) -> Result<PathBuf>
         return Ok(PathBuf::from(binary_name));
     }
 
-    // In production, resolve externalBin from the app directory
-    // For externalBin, Tauri places binaries in:
+    // In production, resolve externalBin from the executable directory.
+    // Tauri places sidecars next to the app executable:
     // - Windows: same directory as .exe
     // - macOS: Contents/MacOS/
     // - Linux: same directory as executable
@@ -64,20 +61,10 @@ fn get_binary_path(app_handle: &AppHandle, binary_name: &str) -> Result<PathBuf>
         binary_name.to_string()
     };
 
-    // Get the app's executable directory
-    let exe_dir = app_handle
-        .path()
-        .resolve("", tauri::path::BaseDirectory::Resource)
-        .context("Failed to resolve exe path")?;
-
-    // On macOS, externalBin is in MacOS folder (sibling to Resources)
-    #[cfg(target_os = "macos")]
-    let binary_dir = exe_dir.join("MacOS");
-
-    // On Windows and Linux, externalBin is in the same directory as the exe
-    #[cfg(not(target_os = "macos"))]
-    let binary_dir = exe_dir;
-
+    let exe_path = std::env::current_exe().context("Failed to resolve executable path")?;
+    let binary_dir = exe_path
+        .parent()
+        .context("Failed to resolve executable directory")?;
     let sidecar_path = binary_dir.join(&binary_name_with_ext);
 
     if !sidecar_path.exists() {
