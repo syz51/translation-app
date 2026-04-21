@@ -31,6 +31,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": ["binaries/lib/*"],
     "externalBin": ["binaries/ffmpeg", "binaries/ffprobe"]
   }
 }

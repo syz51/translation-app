@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, Window};
 
 const POLL_INTERVAL_SECS: u64 = 3;
@@ -10,7 +10,7 @@ const MAX_POLL_ATTEMPTS: u32 = 600; // 30 minutes max (600 * 3 seconds)
 const MAX_RETRIES: u32 = 3;
 const INITIAL_RETRY_DELAY_MS: u64 = 1000; // Start with 1 second
 const MAX_FILE_SIZE_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
-const UPLOAD_TIMEOUT_SECS: u64 = 300; // 5 minutes for large file uploads
+const UPLOAD_TIMEOUT_SECS: u64 = 900; // 15 minutes for local testing of large file uploads
 const POLL_TIMEOUT_SECS: u64 = 10; // 10 seconds for status polling
 const DOWNLOAD_TIMEOUT_SECS: u64 = 120; // 2 minutes for SRT download
 
@@ -87,6 +87,61 @@ fn parse_api_error(error_text: &str, context_msg: &str) -> String {
     format!("{}: {}", context_msg, error_text)
 }
 
+fn truncate_for_log(value: &str, max_chars: usize) -> String {
+    let char_count = value.chars().count();
+    if char_count <= max_chars {
+        return value.to_string();
+    }
+
+    let truncated: String = value.chars().take(max_chars).collect();
+    format!("{}...", truncated)
+}
+
+fn format_error_for_log(error: &anyhow::Error) -> String {
+    let mut chain_messages = Vec::new();
+    let mut reqwest_details = Vec::new();
+
+    for cause in error.chain() {
+        if let Some(reqwest_error) = cause.downcast_ref::<reqwest::Error>() {
+            if reqwest_error.is_timeout() {
+                reqwest_details.push("timeout".to_string());
+            }
+            if reqwest_error.is_connect() {
+                reqwest_details.push("connect".to_string());
+            }
+            if reqwest_error.is_request() {
+                reqwest_details.push("request".to_string());
+            }
+            if reqwest_error.is_body() {
+                reqwest_details.push("body".to_string());
+            }
+            if reqwest_error.is_decode() {
+                reqwest_details.push("decode".to_string());
+            }
+            if let Some(status) = reqwest_error.status() {
+                reqwest_details.push(format!("http_status={status}"));
+            }
+        }
+
+        let message = cause.to_string();
+        if !message.is_empty() && !chain_messages.iter().any(|existing| existing == &message) {
+            chain_messages.push(message);
+        }
+    }
+
+    let mut summary = if chain_messages.is_empty() {
+        "Unknown error".to_string()
+    } else {
+        chain_messages.join(" | ")
+    };
+
+    if !reqwest_details.is_empty() {
+        summary = format!("{summary} | reqwest={}", reqwest_details.join(","));
+    }
+
+    truncate_for_log(&summary, 700)
+}
+
 /// Retry a function with exponential backoff
 async fn retry_with_backoff<F, Fut, T>(
     mut operation: F,
@@ -102,9 +157,14 @@ where
     let mut last_error = None;
 
     for attempt in 0..MAX_RETRIES {
+        let attempt_number = attempt + 1;
+        let started_at = Instant::now();
+
         match operation().await {
             Ok(result) => return Ok(result),
             Err(e) => {
+                let elapsed_ms = started_at.elapsed().as_millis();
+                let error_summary = format_error_for_log(&e);
                 last_error = Some(e);
 
                 // Don't retry on the last attempt
@@ -117,16 +177,30 @@ where
                         task_id,
                         "transcription",
                         &format!(
-                            "{} failed (attempt {}/{}), retrying in {}ms...",
+                            "{} failed (attempt {}/{}) after {}ms: {}. Retrying in {}ms...",
                             operation_name,
-                            attempt + 1,
+                            attempt_number,
                             MAX_RETRIES,
+                            elapsed_ms,
+                            error_summary,
                             delay
                         ),
                     )
                     .await;
 
                     tokio::time::sleep(Duration::from_millis(delay)).await;
+                } else {
+                    let _ = crate::logger::append_log_entry(
+                        app_handle,
+                        window,
+                        task_id,
+                        "transcription",
+                        &format!(
+                            "{} failed (attempt {}/{}) after {}ms: {}. No retries left.",
+                            operation_name, attempt_number, MAX_RETRIES, elapsed_ms, error_summary
+                        ),
+                    )
+                    .await;
                 }
             }
         }
@@ -216,8 +290,9 @@ async fn upload_audio(
         task_id,
         "transcription",
         &format!(
-            "Uploading audio to transcription backend... (File size: {:.2} MB)",
-            file_size as f64 / (1024.0 * 1024.0)
+            "Uploading audio to transcription backend... (File size: {:.2} MB, timeout: {}s)",
+            file_size as f64 / (1024.0 * 1024.0),
+            UPLOAD_TIMEOUT_SECS
         ),
     )
     .await?;
